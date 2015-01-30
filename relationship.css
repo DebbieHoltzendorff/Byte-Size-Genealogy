@@ -1,0 +1,145 @@
+table {
+    margin: 0 auto;
+    border: 1px solid darkgoldenrod;
+    border-collapse: collapse;
+    padding: 20px;
+}
+thead {
+    border: 1px solid darkgoldenrod;
+    padding: 10px;
+    font-size: 24px;
+    color: darkgoldenrod;
+    text-align: center;
+}
+td {
+    border: 1px solid darkgoldenrod;
+    padding: 3px;
+    text-align: center;
+}
+#trTitle {
+    border: 1px solid darkgoldenrod;
+    text-align: left;
+    font-weight: bold;
+}
+#tdTitle {
+    border: 1px solid darkgoldenrod;
+    text-align: left;
+}
+#tdLine {
+    border: 1px solid darkgoldenrod;
+    text-align: right;
+}
+#windowBody {
+    width: 100%;
+    padding: 20px;
+    border: double;
+}
+#windowHeader {
+    padding: 10px;
+    text-align: center;
+    background-color: AliceBlue;
+}
+#windowMiddle {
+    padding: 10px;
+    background-color: AliceBlue;
+}
+#windowFooter {
+    padding: 10px;
+    background-color: AliceBlue;
+}
+#windowLogo {
+    float: left;
+    margin: 0 auto;
+}
+#windowClock {
+    float: right;
+    padding: 5px;
+    color: Blue;
+    width: 129px;
+    height: 36px;
+}
+#windowTitle {
+    height: 36px;
+    text-align: center;
+    font-weight: bold;
+    color: Green;
+    font-size: 30px
+}
+#srBox {
+    float: right;
+    font-size: 10px;
+}
+.toolBox {
+    border: solid;
+    border-width: 1px;
+    /*width: 300px;*/
+    text-align: center;
+    padding: 10px;
+}
+.toolBoxTitle {
+    color: Green;
+    font-size: 24px;
+}
+.outputBox {
+    background-color: Beige;
+}
+.submitButton {
+    background-color: DodgerBlue;
+    font-size: 16px;
+    color: White;
+    font-weight: normal;
+    line-height: 1;
+    vertical-align: middle;
+    text-decoration-line: none;
+    -moz-text-decoration-color: black;
+    -moz-text-decoration-line: none;
+    -moz-text-decoration-style: solid;
+    text-shadow: 0px -1px 0 rgba(0,0,0,0.2);
+    -webkit-box-shadow: 0 3px 0 rgba(0,0,0,0.1);
+    box-shadow: 0 3px 0 rgba(0,0,0,0.1);
+    position: relative;
+    display: inline-block;
+    border: medium none;
+    border-top-color: -moz-use-text-color;
+    border-bottom-color: -moz-use-text-color;
+    -moz-border-top-colors: none;
+    -moz-border-right-colors: none;
+    -moz-border-bottom-colors: none;
+    -moz-border-left-colors: none;
+    border-image-source: none;
+    border-image-repeat: stretch stretch;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+    border-bottom-left-radius: 4px;
+    padding: 10px 20px;
+    white-space: nowrap;
+    cursor: pointer;
+    -moz-user-select: none;
+}
+.submitButton:hover {
+    color: White;
+    background: none repeat scroll 0% 0% #358FE8;
+    text-decoration: none;
+}
+#szlider{
+    width: 100%;
+    height: 15px;
+    border: 1px solid black;
+    overflow: hidden;
+}
+#szliderbar{
+    width: 0%;
+    height:15px;
+    border-right: 1px solid Black;
+    background: #d65946;
+}
+#szazalek {
+    color: Black;
+    font-size: 15px;
+    font-style: italic;
+    font-weight: bold;
+    left: 25px;
+    position: relative;
+    top: -16px;
+}
