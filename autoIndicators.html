@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lean Learning Automated Indicators Tool by Harold Lee and Debbie Holtzendorff</title>
+    <script src='//code.jquery.com/jquery-1.10.1.min.js'></script>
+    <script src='//rootsdev.org/familysearch-javascript-sdk/familysearch-javascript-sdk.js'></script>
+    <link href="autoIndicators.css" rel="stylesheet" type="text/css">
+    <script>
+        function _drawszlider(ossz, meik){
+            var szazalek=Math.round((meik*100)/ossz);
+            document.getElementById("szliderbar").style.width=szazalek+'%';
+            document.getElementById("szazalek").innerHTML=szazalek+'%';
+        }
+    </script>
+</head>
+<body onload="_drawszlider(100, 0);">
+<script>
+    // globals
+    var theTimer;                           // the timer for  the progress bar
+    var ossz = 100;                         // length of the progress bar
+    var meik = 0;                           // current position or value of the progress bar
+    var accessToken;                        // FS session ID
+    var selectedId, selectedName, selectedGender, selectedLifeSpan; // the desired Id to process
+    var genCounter = 0;                      // generation counter
+    var iPrincipalPid = 0;                  // counter of persons in a generation
+    var numCouples = 0;                     // number of a person's spouses
+    var iSpouse = 0;                        // counter of spouses in a generation
+    //var iChild = 0;                         // counter of children in a generation
+    var iPid = 0;                           // counter of unique PIDs in a generation
+    var principalPidArray =  [];            // array of person PIDs in a generation
+    var couplePidArray =  [];               // array of PIDs of couples
+    var spousePidArray =  [];               // array of PIDs of spouses in a generation
+    var childPidArray =  [];                // array of PIDs of children in a generation
+    var pidArray  =  [];                    // array of unique PIDs of an ancestor's spouse(s) and descendants
+    var indicatorNameArray =  [];           // array of names
+    var indicatorGenderArray =  [];            // array of genders
+    var indicatorLifeArray =  [];           // array of life spans
+    var personQualSugg =  [];               // array of person-couple data quality suggestions
+    var personResearchSugg =  [];           // array of person-couple research suggestions
+    var personOtherSugg =  [];              // array of person-couple other suggestions
+    var coupleQualSugg =  [];               // array of couple data quality suggestions
+    var coupleResearchSugg =  [];           // array of couple research suggestions
+    var coupleOtherSugg =  [];              // array of couple other suggestions
+    var parentQualSugg =  [];               // array of parent data quality suggestions
+    var parentResearchSugg =  [];           // array of parent research suggestions
+    var parentOtherSugg =  [];              // array of parent other suggestions
+    var childQualSugg =  [];                // array of child data quality suggestions
+    var childResearchSugg =  [];            // array of child research suggestions
+    var childOtherSugg =  [];               // array of child other suggestions
+    var ordCnt =  [];                       // array of counts of ordinances to be done
+    var recHintCnt =  [];                   // array of record hint counts
+    var suggCnt =  [];                      // array of research suggestion counts
+    var dataCorrCnt =  [];                  // array of data correction counts
+    var kidCnt =  [];                       // array of number of children
+    var totals =  [0, 0, 0, 0, 0];          // array of totals of the indicators
+    var user, userId;                       // user of this program information
+    var childrenCnt = [];                   // array of number of children
+    var printRow = '';                      // output for the user screen
+    var printIt = '';                       // output for the user screen
+    var displayGen = 0;                     // display number of the generation being processed
+    var displayAncNum = 0;                  // display number of the ancestor generation being processed
+
+    function _run() {
+        theTimer = setInterval(function () {meik ++; if(meik >= 100){meik=2;} _drawszlider(ossz,meik);}, 1000);
+        FamilySearch.getAccessToken().then(function(response) {
+            accessToken = response;
+            // get the information about the current user
+            FamilySearch.getCurrentUser().then(function (response) {
+                user = response.getUser();
+                userId = user.personId;
+                indicatorNameArray[userId] = user.contactName;
+                console.log('_gotCurrentUser found ' + userId + ' ' + indicatorNameArray[userId] + '.');
+                output('<br />Hi ' + indicatorNameArray[userId] + '! Thank you for trying our tool. Your results will soon appear below . . . ');
+                FamilySearch.getPerson(userId).then(function (response) {
+                    indicatorNameArray[userId] = response.getPerson(userId).$getDisplayName();
+                    indicatorGenderArray[userId] = response.getPerson(userId).$getDisplayGender();
+                    indicatorLifeArray[userId] = response.getPerson(userId).$getDisplayLifeSpan();
+                    console.log('        userInfo ' + indicatorNameArray[userId] + ' ' + indicatorGenderArray[userId] + ' (' + indicatorLifeArray[userId] + ').');
+                    _aIndRun();
+                })
+            })
+        })
+    }
+    function _aIndRun() {
+        // get the selectedId to process
+        selectedId = aIndForm.aIndPid.value;
+        console.log('selectedId=' + selectedId + '.');
+        if (selectedId == '') {     // if selectedId from the form is empty then use the current user
+            selectedId = userId;
+            selectedName = indicatorNameArray[userId];
+            console.log('selectedId is empty, using userId.');
+        }
+        childrenCnt[selectedId] = '-99';
+        FamilySearch.getPerson(selectedId).then(function (response) {
+            console.log('STARTING getPerson(' + selectedId +').');
+            selectedName = response.getPerson(selectedId).$getDisplayName();
+            selectedGender = response.getPerson(selectedId).$getDisplayGender();
+            selectedLifeSpan = response.getPerson(selectedId).$getDisplayLifeSpan();
+            if (selectedLifeSpan == '') {
+                selectedLifeSpan = Living;
+            }
+            indicatorNameArray[selectedId] = selectedName;
+            indicatorGenderArray[selectedId] = selectedGender;
+            indicatorLifeArray[selectedId] = selectedLifeSpan;
+            console.log('  gotPerson(' + selectedId + ') is ' + selectedName + ' '  + selectedGender + ' [' + selectedLifeSpan + '].');
+            // get the number of ancestor generations to process
+            aIndAncGen = aIndForm.aIndAncGen.value;
+            if (aIndAncGen < 1) {
+                aIndAncGen = 1
+            }
+            else if (aIndAncGen > 8) {
+                aIndAncGen = 8;
+            }
+
+            console.log('You requested ' + aIndAncGen + ' Ancestor Generation(s).');
+            // get the number of descendant generations to process
+            aIndDescGen = aIndForm.aIndDescGen.value;
+            if (aIndDescGen < 1) {
+                aIndDescGen = 1;
+            }
+            else if (aIndDescGen > 4) {
+                aIndDescGen = 4;
+            }
+            output('<br />You requested ' + aIndAncGen + ' generations of ancestors and ' + aIndDescGen + ' generations of their descendants.');
+            console.log('You requested ' + aIndDescGen + ' Descendant Generation(s).');
+            output('<br />Finding the ancestors of ' + selectedId + ' ' + selectedName + '. Please wait . . .');
+            console.log('CALLING _aIndGetAllAncestors(' + selectedId + ' ' + selectedName + ')');
+            var selectedPidArray = [selectedId];       // initial array to start finding ancestors
+            _aIndGetAllAncestors(selectedPidArray, aIndAncGen).then(function (response) {
+                // get the ancestors
+                // THEN
+                // show the list of ancestors found
+                printIt = '<p>&nbsp;</p><table class="ancestorTable">' +
+                    '<tr><td class="ancestorTitle" colspan="8">Ancestors of '
+                    //+ selectedId + ' '
+                    + selectedName + '</td></tr>';
+                for (var i = 0; i < response.length; i++) {
+                    printRow += '<tr><td class="ancestorHeadings" colspan="5">Generation ' + i + ':</td></tr>';
+                    console.log('Generation ' + i + ':' + response[i]);
+                    //console.log(' response[' + i + '].length=' + response[i].length);
+                    for (var j = 0; j < response[i].length; j++) {
+                        displayAncNum++;
+                        //displayAncNum = j + 1;
+                        // only the males of the last generation are moved to childPidArray for processing later
+                        if (i == aIndAncGen && indicatorGenderArray[response[i][j]] == 'Male') {
+                            childPidArray.push(response[i][j]);
+                        }
+                        printRow += '<tr><td class="ancestorBody">Ancestor ' + displayAncNum
+                            + ':</td><td class="ancestorBody">' + response[i][j]
+                            + '</td><td class="ancestorBody">' + indicatorNameArray[response[i][j]]
+                            + '</td><td class="ancestorBody">' + indicatorGenderArray[response[i][j]]
+                            + '</td><td class="ancestorBody">(' + indicatorLifeArray[response[i][j]] + ')</td></tr>';
+                            //console.log('    Ancestor ' + displayAncNum + ':'
+                            //+ response[i][j] + ' ' + indicatorNameArray[response[i][j]] + ' ' + indicatorGenderArray[response[i][j]] + ' (' + indicatorLifeArray[response[i][j]] + ')');
+                    }
+                    printIt += printRow;
+                    printRow = '';
+                }
+                //console.log(printIt);
+                output(printIt + '</table>');
+                //console.log('_______________________________________________________________________________________________________________________________________________');
+                printIt = '';
+                genCounter = -1;
+                // start with the last generation requested
+                //console.log('CALLING _processGeneration ' + aIndAncGen + ' has ' + childPidArray.length + ' persons [childPidArray=' + childPidArray + '].');
+                //iChild = childPidArray.length;
+                _processGeneration();
+            })
+        })
+    }
+    // Get all the male Ancestors with Dallan's program
+    function _aIndGetAllAncestors(personIds, genCounter) { // find the ancestors
+        var fatherId;
+        //dupFlag = "NO";                     // NO=Not a duplicate; YES= it is a duplicate
+        displayGen = aIndAncGen - genCounter;
+        //console.log(' ');
+        console.log('STARTING _aIndGetAllAncestors for Generation ' + displayGen + ' (' + personIds + ') for ' + personIds.length + ' ancestors.');
+        //
+        // base case
+        if (genCounter === 0) {
+            // when jQuery.when is called with a single parameter, it returns a promise
+            // that is resolved immediately
+            return jQuery.when([personIds]);
+        }
+        // create an array of promises - one for each ancestor
+        // each promise returns an array of that person's parentIds (father, mother)
+        var promises = [];
+        for (var i = 0; i < personIds.length; i++) {
+            //console.log('  Pushing promise for ' + i + ':' + personIds[i]);
+            promises.push(FamilySearch.getParents(personIds[i]).then(function (response) {
+                //    get the Parents
+                //    THEN
+                //    save the Parents
+                var parentIds = []; // an array of the ids of the father and mother
+                var relationships = response.getChildAndParentsRelationships();
+                for (var j = 0; j < relationships.length; j++) {
+                    var relationship = relationships[j];
+                    fatherId = relationship.$getFatherId();
+                    if (!!fatherId) {
+                        console.log('  Found Father=' + fatherId + ' of ' + relationship.$getChildId());
+                        parentIds.push(fatherId);
+                        indicatorNameArray[fatherId] = ' ';
+                        indicatorGenderArray[fatherId] = 'Male';
+                        indicatorLifeArray[fatherId] = ' ';
+                        gotPersonFather = response.getPerson(fatherId);
+                        if (!!gotPersonFather) {
+                            if (gotPersonFather.$getDisplayName() === undefined) {
+                                indicatorNameArray[fatherId] = 'UNKNOWN';
+                            } else {
+                                indicatorNameArray[fatherId] = gotPersonFather.$getDisplayName();
+                            }
+                            if (gotPersonFather.$getDisplayLifeSpan() === undefined) {
+                                indicatorLifeArray[fatherId] = '    -    ';
+                            } else {
+                                indicatorLifeArray[fatherId] = gotPersonFather.$getDisplayLifeSpan();
+                            }
+                            console.log('    Stored to indicatorNameArray[' + fatherId + '] is ' + indicatorNameArray[fatherId]
+                                + ' indicatorLifeArray(' + indicatorLifeArray[fatherId] + ').');
+                        }
+                    } else {
+                        console.log('  No Father found for ' + relationship.$getChildId());
+                    }
+                    //console.log('  Father is a Duplicate? ' + dupFlag);
+                    //if (dupFlag == "NO") {// Father is unique
+                    //} else {console.log('Father is a DUPLICATE!');}
+                    motherId = relationship.$getMotherId();
+                    if (!!motherId) {
+                        console.log('     Found Mother=' + motherId + ' of ' + relationship.$getChildId());
+                        indicatorGenderArray[motherId] = 'Female';
+                        parentIds.push(motherId);
+                        indicatorNameArray[motherId] = ' ';
+                        indicatorLifeArray[motherId] = ' ';
+                        gotPersonMother = response.getPerson(motherId);
+                        if (!!gotPersonMother) {
+                            if (gotPersonMother.$getDisplayName() === undefined) {
+                                indicatorNameArray[motherId] = 'UNKNOWN';
+                            } else {
+                                indicatorNameArray[motherId] = gotPersonMother.$getDisplayName();
+                            }
+                            if (gotPersonMother.$getDisplayLifeSpan() === undefined) {
+                                indicatorLifeArray[motherId] = '    -    ';
+                            } else {
+                                indicatorLifeArray[motherId] = gotPersonMother.$getDisplayLifeSpan();
+                            }
+                            //console.log('    Stored to indicatorNameArray[' + motherId + '] is ' + indicatorNameArray[motherId]
+                            //+ ' indicatorLifeArray(' + indicatorLifeArray[motherId] + ').');
+                        }
+                    } else {
+                        console.log('  No Mother found for ' + relationship.$getChildId());
+                    }
+                    //console.log('  Mother is a Duplicate? ' + dupFlag);
+                    //if (dupFlag == "NO") {// Mother is unique
+                    //} else {console.log('Mother is a DUPLICATE!');}
+                    fatherId = null;
+                    motherId = null;
+                }
+                return parentIds;
+            }));
+        }
+        return jQuery.when.apply(null, promises).then(function () {
+            // the "arguments" passed to this function holds an array of responses
+            // each response is the array of parentIds from above
+            displayGen = aIndAncGen - genCounter;
+            console.log('        PROMISES COMPLETE FOR GENERATION ' + displayGen + '.');
+            var allParentIds = [];
+            for (var i = 0; i < arguments.length; i++) {
+                //console.log('      Retrieved i=' + i + ' arguments[i]=' + arguments[i]);
+                if (arguments[i] === undefined) { //skip the generation if there are no parents
+                } else {
+                    for (var j = 0; j < arguments[i].length; j++) {
+                        if (arguments[i][j] === undefined) { //skip the entry if there are no parents
+                        } else {
+                            if (allParentIds.indexOf(arguments[i][j]) === -1) {// skip duplicate couples
+                                //console.log('            Pushing to allParentIds(' + arguments[i][j] + ')');
+                                allParentIds.push(arguments[i][j]);
+                            }
+                        }
+                    }
+                }
+            }
+            // return a promise for the passed-in personIds concat'd with allAncestorIds
+            return _aIndGetAllAncestors(allParentIds, genCounter - 1).then(function (allAncestorIds) {
+                return [personIds].concat(allAncestorIds);
+            });
+        });
+    }
+    // process the next generation
+    function _processGeneration() {
+        genCounter ++;
+        displayGen = aIndAncGen - genCounter;
+        console.log('____________________________________________________________________________________________________________________');
+        if (genCounter <= aIndDescGen){
+            numPrincipalPid = childPidArray.length;
+            output('<p />*** Finding the families of Generation ' + displayGen + ' ***');
+            console.log('STARTING _processGeneration ' + displayGen + ' for ' + numPrincipalPid + ' persons in childPidArray=' + childPidArray);
+            for (i = 0; i < numPrincipalPid; i ++) {
+                principalPidArray[i] = childPidArray[i];
+            }
+            childPidArray = [];
+            iPrincipalPid = -1;
+            //iSpouse = 0;
+            //iChild = 0;
+            _processCouples();
+        }
+        else {
+            console.log('CALLING _processOrdinances for ' + pidArray.length + ' persons.');
+            iPid = -1;
+            _processOrdinances();
+        }
+    }
+    // process the next "principal PID"
+    function _processCouples() {
+        iPrincipalPid ++;
+        //console.log('STARTING _processCouples(' +  iPrincipalPid + ' persons).');
+        if (iPrincipalPid < numPrincipalPid) {
+            _getCouples(principalPidArray[iPrincipalPid]);
+        }
+        else {
+            numCouples = couplePidArray.length;
+            iSpouse = -1;
+            displayGen --;
+            _processChildren();
+        }
+    }
+    // process a spouse's children
+    function _processChildren() {
+        iSpouse ++;
+        //console.log('STARTING _processChildren(' +  iSpouse + ').');
+        if (iSpouse < numCouples) {
+            console.log('CALLING _getChildren( Couple ' +  iSpouse + ':' + couplePidArray[iSpouse] + ' & ' + spousePidArray[iSpouse] + ').');
+            _getChildren(couplePidArray[iSpouse], spousePidArray[iSpouse]);
+        }
+        else {
+            _processGeneration();
+        }
+    }
+    // process ordinances
+    function _processOrdinances() {
+        iPid ++;
+        //console.log('STARTING _processOrdinances(' + iPid + ').');
+        if (iPid < pidArray.length) {
+            var pid = pidArray[iPid];
+            ordCnt[iPid] = 0;
+            recHintCnt[iPid] = 0;
+            suggCnt[iPid] = 0;
+            dataCorrCnt[iPid] = 0;
+            //output('<p /><b> ________________________________________ </b>' + ' pid: ' + pid
+            //    + ' name: ' + indicatorNameArray[pid] + ' gender: ' + indicatorGenderArray[pid] + ' lifeSpan: ' + indicatorLifeArray[pid]);
+            //console.log('Calling _getOrdinances for ' + ' pid: ' + pid + ' name: ' + indicatorNameArray[pid] + ' gender: ' + indicatorGenderArray[pid] + ' lifeSpan: ' + indicatorLifeArray[pid]);
+            //console.log('CALLING _getOrdinances().');
+            _getOrdinances();
+        }
+        else {
+            printIt = '<p><table class="aIndTable"><tr><td class="aIndTitle" colspan="8">Hints for ' + selectedId + ' ' + selectedName + '</td></tr>';
+            for (var i = 0; i < pidArray.length; i++) {
+                if (i == 0) {
+                    printIt += '<tr><td class="aIndBody" width="12"><font color="limegreen">' + 'REQUEST ORDINANCES' + '</font></td>'
+                        + '<td class="aIndBody" width="12"><font color="brown">' + 'RECORD HINTS' + '</font></td>'
+                        + '<td class="aIndBody" width="12"><font color="blue">' + 'RESEARCH SUGGESTIONS' + '</font></td>'
+                        + '<td class="aIndBody" width="12"><font color="red">' + 'DATA PROBLEMS' + '</font></td>'
+                        + '<td class="aIndBody" width="12">' + 'Children?' + '</td>'
+                        + '<td class="aIndBody">' + 'PID' + '</td>'
+                        + '<td class="aIndBody">' + 'Life Span' + '</td>'
+                        + '<td class="aIndBody">' + 'Name' + '</td></tr>';
+                }
+                var jPid = pidArray[i];
+                if (ordCnt[i] + recHintCnt[i] + suggCnt[i] + dataCorrCnt[i] > 0) {
+                    if (ordCnt[i] == 0) {ordCnt[i] = '';}
+                    if (recHintCnt[i] == 0) {recHintCnt[i] = '';}
+                    if (suggCnt[i] == 0) {suggCnt[i] = '';}
+                    if (dataCorrCnt[i] == 0) {dataCorrCnt[i] = '';}
+                    if (kidCnt[jPid] == 0 || kidCnt == '-99') {kidCnt[jPid] = '';}
+                    if (kidCnt[jPid] == '-99') {kidCnt[jPid] = '';}
+                    if (indicatorNameArray[jPid] == '') {indicatorNameArray[jPid] = 'Unknown';}
+                    printIt += '<tr class="aIndBody"><td class="aIndBody"><a href="https://familysearch.org/tree/#view=ancestor&person=' + pidArray[i] + '&section=ordinances"><font color="limegreen">' + ordCnt[i] + '</font></a></td>'
+                            + '<td class="aIndBody"><a href="https://familysearch.org/tree/#view=allMatchingRecords&person=' + pidArray[i] + '"><font color="brown">' + recHintCnt[i] + '</font></a></td>'
+                            + '<td class="aIndBody"><a href="https://familysearch.org/tree/#view=tree&person=' + pidArray[i] + '&section=descendancy"><font color="blue">' + suggCnt[i] + '</font></a></td>'
+                            + '<td class="aIndBody"><a href="https://familysearch.org/tree/#view=tree&person=' + pidArray[i] + '&section=descendancy"><font color="red">' + dataCorrCnt[i] +'</font></a></td>'
+                            + '<td class="aIndBody">' + kidCnt[jPid] +'</td>'
+                            + '<td class="aIndBody">' + jPid +'</td>'
+                            + '<td class="aIndBody">' + indicatorLifeArray[jPid] + '</td>'
+                            + '<td class="aIndBody"><a href="https://familysearch.org/tree/#view=ancestor&person=' + pidArray[i] + '">' + indicatorNameArray[jPid] + '</a></td></tr>';
+                }
+            }
+            printIt += '<tr>'
+                    +  '<td class="aIndBody">' + totals[0]  + '</td>'
+                    +  '<td class="aIndBody">' + totals[1]  + '</td>'
+                    +  '<td class="aIndBody">' + totals[2]  + '</td>'
+                    +  '<td class="aIndBody">' + totals[3]  + '</td>'
+                    +  '<td  class="aIndBody"align="left" COLSPAN="4">' + 'TOTALS'
+                    +  '</td></tr></table></p>';
+            output(' ' + printIt);
+            clearInterval(theTimer);
+            _drawszlider(100,100);
+        }
+    }
+    // get the "principal PID's" spouses
+    function _getCouples(pid) {
+        console.log('STARTING _getCouples(' + pid + ').');
+        var theUrl = 'https://familysearch.org/tree-data/descendancy/' + pid + '/spouses?fsSessionId=' + accessToken;
+//        var theUrl = 'https://beta.familysearch.org/tree-data/descendancy/' + pid + '/spouses?fsSessionId=' + accessToken;
+        var numSpouses = 0;
+        var spousePid;
+        // retrieve the spouses data
+        $.getJSON(theUrl, function (result) {
+            if (result != null) {
+                $.each(result, function (key, val) {
+                    if (key == 'data') {
+                        if (val != null) {
+                            numSpouses = val.length;
+                            //console.log('gotCouples( ' + pid + ') val=' + val + ' val.length=' + numSpouses + '.');
+                            //output('<br />' + pid + ' ' + indicatorNameArray[pid] + ' has ' + numSpouses + ' spouse(s)');
+                            // for each spouse:
+                            $.each(val, function (spousesKey, spousesVal) {
+                                //console.log('spousesKey=' + spousesKey + ' spousesVal=' + spousesVal);
+                                // get the data
+                                $.each(spousesVal, function (spouseDataKey, spouseDataVal) {
+                                    // get person's data (not the spouse)
+                                    if (spouseDataKey == 'person') {
+                                        $.each(spouseDataVal, function (personKey, personVal) {
+                                            if (personKey == 'id'){
+                                                //console.log('  Found Person Id:' + pid + ' ' + indicatorNameArray[pid]);
+                                            //} else {
+                                                    //personKey == 'name' ||
+                                                    //personKey == 'gender' ||
+                                                    //personKey == 'lifeSpan') {
+                                                //console.log(' Husband ' + personKey + ': ' + personVal);
+                                            }
+                                        })
+                                    }
+                                    // get the spouse's data
+                                    if (spouseDataKey == 'spouse') {
+                                        if (spouseDataVal != null) {
+                                            $.each(spouseDataVal, function (spouseKey, spouseVal) {
+                                                if (spouseKey == 'id') {
+                                                    spousePid = spouseVal;
+                                                    pidArray[iPid] = spousePid;
+                                                    kidCnt[spousePid] = '-99';
+                                                    iPid ++;
+                                                    couplePidArray.push(pid);
+                                                    spousePidArray.push(spousePid);
+                                                    //iSpouse ++;
+                                                    console.log('    Person:' + pid + ' ' + indicatorNameArray[pid] + ' has Spouse Id: ' + spousePid);
+                                                }
+                                                if (spouseKey == 'name') {
+                                                    indicatorNameArray[spousePid] = spouseVal;
+//                                                    console.log(' ' + spouseKey + ': ' + spouseVal);
+                                                }
+                                                if (spouseKey == 'gender') {
+                                                    indicatorGenderArray[spousePid] = spouseVal;
+//                                                    console.log(' ' + spouseKey + ': ' + spouseVal);
+                                                }
+                                                if (spouseKey == 'lifeSpan') {
+                                                    indicatorLifeArray[spousePid] = spouseVal;
+//                                                    console.log(' ' + spouseKey + ': ' + spouseVal);
+                                                    output('<br />&nbsp;&nbsp;&nbsp;&nbsp;Person:' + pid + ' ' + indicatorNameArray[pid] + ' has Spouse:' + spousePid + ' ' + indicatorNameArray[spousePid]
+                                                        + ' ' + indicatorGenderArray[spousePid] + ' (' + indicatorLifeArray[spousePid] + ')');
+                                                }
+                                            })
+                                        }
+                                    }
+                                    // get the person suggestions
+                                    if (spouseDataKey == 'personCoupleSuggestions' && spouseDataVal != null) {
+                                        $.each(spouseDataVal, function (personSuggKey, personSuggVal) {
+                                            if (personSuggVal != null && personSuggVal != 'NO_SOURCES_ATTACHED') {
+                                                if (personSuggKey == 'dataQualityList') {
+                                                    personQualSugg[pid] = personSuggVal;
+                                                    //console.log(personSuggKey + ': ' + personSuggVal + '');
+                                                }
+                                                else if (personSuggKey == 'researchSuggestionList') {
+                                                    personResearchSugg[pid] = personSuggVal;
+                                                    //console.log(personSuggKey + ': ' + personSuggVal + '');
+                                                }
+                                                else {
+                                                    personOtherSugg[pid] = personSuggVal;
+                                                    //console.log(personSuggKey + ': ' + personSuggVal + '');
+                                                }
+                                            }
+                                        })
+                                    }
+                                    // get the couple suggestions
+                                    if (spouseDataKey == 'spouseCoupleSuggestions' && spouseDataVal != null) {
+                                        $.each(spouseDataVal, function (coupleSuggKey, coupleSuggVal) {
+                                            if (coupleSuggVal != null && coupleSuggVal != 'NO_SOURCES_ATTACHED') {
+                                                if (coupleSuggKey == 'dataQualityList') {
+                                                    coupleQualSugg[spousePid] = coupleSuggVal;
+                                                    //console.log(coupleSuggKey + ': ' + coupleSuggVal + '');
+                                                }
+                                                else if (coupleSuggKey == 'researchSuggestionList') {
+                                                    coupleResearchSugg[spousePid] = coupleSuggVal;
+                                                    //console.log(coupleSuggKey + ': ' + coupleSuggVal + '');
+                                                }
+                                                else {
+                                                    coupleOtherSugg[spousePid] = coupleSuggVal;
+                                                    //console.log(coupleSuggKey + ': ' + coupleSuggVal + '');
+                                                }
+                                            }
+                                        })
+                                    }
+                                })
+                            })
+                        }
+                    }
+                })
+            }
+            // get the next couple
+            _processCouples();
+        })
+    }
+    // get a spouse's children
+    function _getChildren(pid, spousePid) {
+        //console.log('STARTING _getChildren(' + pid + ',' + spousePid + ').');
+        var theUrl = 'https://familysearch.org/tree-data/descendancy/' + pid + '_' + spousePid + '/children?fsSessionId=' + accessToken;
+        var childPid;
+        if (kidCnt[pid] < 1) {
+            kidCnt[pid] = 0;
+        }
+        if (kidCnt[spousePid] < 1) {
+            kidCnt[spousePid] = 0;
+        }
+        // retrieve the children data
+        $.getJSON(theUrl, function(result) {
+//            console.log('<p /> URL=' + theUrl);
+            if (result != null) {
+                //output('<p />Children of ' + pid + ' ' + indicatorNameArray[pid] + ' and ' + spousePid + ' ' + indicatorNameArray[spousePid]+ ':');
+                $.each(result, function(key, val) {
+                    if (key == 'data') {
+                        $.each(val, function(dataKey, dataVal) {
+                            // get the parent suggestions
+                            if (dataKey == 'parentSuggestions' && dataVal != null) {
+                                var parSuggArray = dataVal;
+                                $.each(parSuggArray, function(parSuggKey, parSuggVal) {
+                                    if (parSuggVal != null && parSuggVal != 'NO_SOURCES_ATTACHED') {
+                                        if (parSuggKey == 'dataQualityList') {
+                                            parentQualSugg[spousePid] = parSuggVal;
+                                            //console.log(parSuggKey + ': ' + parSuggVal + '');
+                                        }
+                                        else if (parSuggKey == 'researchSuggestionList') {
+                                            parentResearchSugg[spousePid] = parSuggVal;
+                                            //console.log(parSuggKey + ': ' + parSuggVal + '');
+                                        }
+                                        else {
+                                            parentOtherSugg[spousePid] = parSuggVal;
+                                            //console.log(parSuggKey + ': ' + parSuggVal + '');
+                                        }
+                                    }
+                                })
+                            }
+                            // retrieve the children data
+                            if (dataKey == 'children') {
+                                if (dataVal != null) {
+                                    var numChildren = dataVal.length;
+                                    if (numChildren >= 0) {
+                                        kidCnt[pid] = numChildren;
+                                        kidCnt[spousePid] = numChildren;
+                                        output('<br />Found ' + numChildren + ' children of '
+                                            + pid + ' ' + indicatorNameArray[pid] + ' & '
+                                            + spousePid + ' ' + indicatorNameArray[spousePid] + '.');
+                                    }
+                                    // for each child:
+                                    for (var i = 0; i < numChildren; i++) {
+                                        $.each(dataVal, function(childrenKey, childrenVal) {
+                                            if (childrenKey == i) {
+                                                var childArray = childrenVal;
+                                                var displayChildNum = i + 1;
+                                                //console.log('    Found Child ' + displayChildNum);
+                                                // get the data
+                                                $.each(childArray, function(childKey, childVal) {
+                                                    if (childKey == 'id') {
+                                                        childPid = childVal;
+                                                        pidArray[iPid] = childPid;
+                                                        kidCnt[childPid] = '-99';
+                                                        iPid ++;
+                                                        //iChild ++;
+                                                        childPidArray.push(childPid);
+                                                    }
+                                                    if (childKey == 'name') {
+                                                        indicatorNameArray[childPid] = childVal;
+                                                        console.log('        Found child ' + displayChildNum + ':' + childPid + ' ' + childVal);
+                                                        //output('<br />Child (accumulated) ' + displayChildNum + ' ' + childKey + ': ' + childVal);
+                                                    }
+                                                    if (childKey == 'gender') {
+                                                        indicatorGenderArray[childPid] = childVal;
+                                                        //console.log('          ' + childKey + ': ' + childVal);
+                                                    }
+                                                    if (childKey == 'lifeSpan') {
+                                                        indicatorLifeArray[childPid] = childVal;
+                                                        //console.log('          ' + childKey + ': ' + childVal);
+                                                        output('<br />&nbsp;&nbsp;&nbsp;&nbsp;Found child ' + displayChildNum + ' : ' + childPid + ' ' + indicatorNameArray[childPid]
+                                                            + ' ' + indicatorGenderArray[childPid] + ' (' + indicatorLifeArray[childPid] + ')');
+                                                    }
+                                                    // get the child suggestions
+                                                    if (childKey == 'suggestions' && childVal != null) {
+                                                        $.each(childVal, function(childSuggKey, childSuggVal) {
+                                                            if (childSuggVal != null && childSuggVal != 'NO_SOURCES_ATTACHED') {
+                                                                if (childSuggKey == 'dataQualityList') {
+                                                                    childQualSugg[childPid] = childSuggVal;
+                                                                    //console.log( childSuggKey + ': ' + childSuggVal + '');
+                                                                }
+                                                                else if (childSuggKey == 'researchSuggestionList') {
+                                                                    childResearchSugg[childPid] = childSuggVal;
+                                                                    //console.log( childSuggKey + ': ' + childSuggVal + '');
+                                                                }
+                                                                else {
+                                                                    childOtherSugg[childPid] = childSuggVal;
+                                                                    //console.log(childSuggKey + ': ' + childSuggVal + '');
+                                                                }
+                                                            }
+                                                        })
+                                                    }
+                                                })
+                                            }
+                                        })
+                                    }
+                                }
+                            }
+                        })
+                    }
+                })
+            }
+            _processChildren();
+        })
+    }
+    // get the ordinances not done
+    function _getOrdinances() {
+        var theUrl = 'https://familysearch.org/tree-data/reservations/person/' + pidArray[iPid] + '/ordinances?fsSessionId=' + accessToken;
+//        console.log('<p /> URL=' + theUrl);
+        $.getJSON(theUrl, function(result) {
+            if (result != null) {
+                console.log('*** FINDING ORDINANCES TO DO for person:' + iPid + ' ' + pidArray[iPid] + '   ');
+                $.each(result, function(key, val) {
+                    if (key == 'data') {
+                        $.each(val, function(dataKey, dataVal) {
+                            if (dataKey == 'baptism'   || dataKey == 'confirmation'      ||  dataKey == 'initiatory'
+                             || dataKey == 'endowment' || dataKey == 'sealingsToParents' || dataKey == 'sealingsToSpouses') {
+                                $.each(dataVal, function(ordKey, ordVal) {
+                                    if (ordKey == 'ownerName' && ordVal != null) {
+                                        //console.log(dataKey + ': ' + ordKey + ': ' + ordVal);
+                                    }
+                                    else if (ordKey == 'reservedDate' && ordVal != null) {
+                                        //console.log(dataKey + ': ' + ordKey + ': ' + ordVal);
+                                    }
+                                    else if (ordKey == 'assignedToTemple' && ordVal != false) {
+                                        //console.log(dataKey + ': ' + ordKey + ': ' + ordVal);
+                                    }
+                                    else if (ordVal == 'Needs More Information'
+                                         ||  ordVal == "This person's record contains enough information for ordinances to be performed."
+                                         ||  ordVal == 'This ordinance might be done. Please contact FamilySearch Support if you have questions or information.') {
+                                        ordCnt[iPid] ++;
+                                        //console.log('       ' + dataKey + ': ' + ordVal);
+                                    }
+                                    else if (ordKey == '0') {
+                                        $.each(ordVal, function(sealKey, sealVal) {
+                                            if (sealKey == 'ownerName' && sealVal != null) {
+                                                //console.log(dataKey + ': ' + sealKey + ': ' + sealVal);
+                                            }
+                                            else if (sealKey == 'reservedDate' && sealVal != null) {
+                                                //console.log(dataKey + ': ' + sealKey + ': ' + sealVal);
+                                            }
+                                            else if (sealKey == 'assignedToTemple' && sealVal != false) {
+                                                //console.log(dataKey + ': ' + sealKey + ': ' + sealVal);
+                                            }
+                                            else if (sealVal == 'Needs More Information'
+                                                 ||  sealVal == "This person's record contains enough information for ordinances to be performed."
+                                                 ||  sealVal == 'This person must be linked to the parents before the sealing can be performed.'
+                                                 ||  sealVal == 'This ordinance might be done. Please contact FamilySearch Support if you have questions or information.'
+                                                 ||  sealVal == 'Sealing to Parents not available.') {
+                                                    ordCnt[iPid] ++;
+                                                    //console.log('           ' + dataKey + ': ' + sealVal);
+                                            }
+                                        })
+                                    }
+                                })
+                            }
+                        });
+                        totals[0] = totals[0] + ordCnt[iPid];
+                    }
+                })
+            }
+            _getRecordHints();
+        })
+    }
+    // get the record hint suggestions
+    function _getRecordHints() {
+        var theUrl = 'https://familysearch.org/tree-data/record-matches/' + pidArray[iPid] + '?fsSessionId=' + accessToken;
+//        console.log('<p /> URL=' + theUrl);
+        $.getJSON(theUrl, function(result) {
+            if (result != null) {
+                console.log('      FINDING RECORD HINTS for '+ pidArray[iPid] + '   ');
+                $.each(result, function(key, val) {
+                    if (key == 'data') {
+                        $.each(val, function(dataKey, dataVal) {
+                            if (dataKey == 'matches') {
+                                $.each(dataVal, function(suggKey, suggVal) {
+                                    recHintCnt[iPid] ++;
+                                    //console.log('          Record Hint ' + recHintCnt[iPid] + ' for ' + pidArray[iPid]);
+                                    $.each(suggVal, function(suggIKey, suggIVal) {
+                                        if (suggIKey != 'events' && suggIKey != 'relations') {
+                                            //console.log(suggIKey + ': ', suggIVal);
+                                        }
+                                    })
+                                });
+                                totals[1] = totals[1] + recHintCnt[iPid];
+                            }
+                        })
+                    }
+                })
+            }
+            _getOtherSuggestions();
+            _processOrdinances();
+        })
+    }
+    // print the other suggestions
+    function _getOtherSuggestions() {
+        console.log('      FINDING OTHER RESEARCH SUGGESTIONS for '+ pidArray[iPid] + '   ');
+        var pid = pidArray[iPid];
+        if (personResearchSugg[pid] != null || coupleResearchSugg[pid] != null ||
+                parentResearchSugg[pid] != null || childResearchSugg[pid] != null) {
+            if (personResearchSugg[pid] != null) {
+                suggCnt[iPid] ++;
+                //console.log(personResearchSugg[pid]);
+            }
+            if (coupleResearchSugg[pid] != null) {
+                suggCnt[iPid] ++;
+                //console.log(coupleResearchSugg[pid]);
+            }
+            if (parentResearchSugg[pid] != null) {
+                suggCnt[iPid] ++;
+                //console.log(parentResearchSugg[pid]);
+            }
+            if (childResearchSugg[pid] != null) {
+                suggCnt[iPid] ++;
+                //console.log(childResearchSugg[pid]);
+            }
+        }
+        if (personOtherSugg[pid] != null || coupleOtherSugg[pid] != null ||
+                parentOtherSugg[pid] != null || childOtherSugg[pid] != null) {
+            if (personOtherSugg[pid] != null) {
+                suggCnt[iPid] ++;
+                //console.log(personOtherSugg[pid]);
+            }
+            if (coupleOtherSugg[pid] != null) {
+                suggCnt[iPid] ++;
+                //console.log(coupleOtherSugg[pid]);
+            }
+            if (parentOtherSugg[pid] != null) {
+                suggCnt[iPid] ++;
+                //console.log(parentOtherSugg[pid]);
+            }
+            if (childOtherSugg[pid] != null) {
+                suggCnt[iPid] ++;
+                //console.log(childOtherSugg[pid]);
+            }
+        }
+        console.log('      FINDING DATA PROBLEMS for ' + pidArray[iPid]  + '   ');
+        if (personQualSugg[pid] != null || coupleQualSugg[pid] != null ||
+                parentQualSugg[pid] != null || childQualSugg[pid] != null) {
+            if (personQualSugg[pid] != null) {
+                dataCorrCnt[iPid] ++;
+                //console.log(personQualSugg[pid]);
+            }
+            if (coupleQualSugg[pid] != null) {
+                dataCorrCnt[iPid] ++;
+                //console.log(coupleQualSugg[pid]);
+            }
+            if (parentQualSugg[pid] != null) {
+                dataCorrCnt[iPid] ++;
+                //console.log(parentQualSugg[pid]);
+            }
+            if (childQualSugg[pid] != null) {
+                dataCorrCnt[iPid] ++;
+                //console.log(childQualSugg[pid]);
+            }
+        }
+        totals[2] = totals[2] + suggCnt[iPid];
+        totals[3] = totals[3] + dataCorrCnt[iPid];
+    }
+
+    // login info
+    FamilySearch.init({
+        app_key: 'KR4Z-3TG2-GD1M-FSM9-RX8R-PP4V-JS7Y-3P6J',  // production
+        environment: 'production',
+        auth_callback: 'http://localhost:63342/js',  // production
+        http_function: $.ajax,
+        deferred_function: $.Deferred
+    });
+    // display results
+    function output(data) {
+        $('#output').append(data);
+    }
+</script>
+<table id="windowBody">
+    <tr>
+        <td id="windowHeader">
+            <img id="windowLogo" alt="FamilySearch Logo" src="https://edge.fscdn.org/assets/img/theme-engage/assets/images/tree-logotype-1x-94806fd4d3214ea1ab7ce7eac7310d2c.png">
+            &nbsp;
+            <iframe id="windowClock" src="http://free.timeanddate.com/clock/i4ds13cp/n220/fc039/tccff/ftb/tt0/tw1/tm1/ta1/tb4"></iframe>
+        </td>
+    </tr>
+    <tr>
+        <td id="windowTitle">Welcome to the Lean Learning Genealogy</td>
+    </tr>
+    <tr><!-- This is the body of the page -->
+        <td id="windowMiddle" class="toolBox">
+            <!-- This is the title of the Indicator Tool-->
+            <p class="toolBoxTitle">Automated Indicators for Research</p>
+            <p><b>This tool shows opportunities for Requesting Ordinances, Record Hints, Research Suggestions and Data Problems in your tree.</b></p>
+            <!-- This is the automated Indicator request form presented to the user -->
+            <form id="aIndForm">
+                <p>Family Search Id (Leave blank for your own Id):
+                    <input name="aIndPid"     value="KWJD-MJR" type="text" size="8"></p>
+                <p>Number of Ancestor Generations to Search:
+                    <input name="aIndAncGen"  value=3          type="number" size="1"></p>
+                <p>Number of Descendant Generations to Search:
+                    <input name="aIndDescGen" value=2          type="number" size="1"></p>
+                <!-- This is the Automated Indicators submit button -->
+                <p><a href="#" onclick="_run('aInd')"><div id="aIndButton" class="submitButton">Click Here</div></a></p>
+                <p id="toolCreated">Created by Harold Lee and Debbie Holtzendorff</p>
+            </form>
+        </td>
+    </tr>
+    <tr><!-- This is the progress bar -->
+        <td id="progressBar">
+            <div id="szlider">
+                <div id="szliderbar"></div>
+                <div id="szazalek"></div>
+            </div>
+        </td>
+    </tr>
+    <tr><!-- The is the output box -->
+        <td id="output" class="outputBox">&nbsp;
+        </td>
+    </tr>
+    <tr><!-- This is page footer-->
+        <td id="windowFooter">&nbsp;
+        </td>
+    </tr>
+</table>
+</body>
+</html>
