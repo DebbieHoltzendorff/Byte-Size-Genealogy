@@ -1,0 +1,2460 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lean Learning's Byte-Sized Genealogy Dashboard by Debbie Holtzendorff</title>
+    <script src='//code.jquery.com/jquery-1.10.1.min.js'></script>
+    <script src='//rootsdev.org/familysearch-javascript-sdk/familysearch-javascript-sdk.js'></script>
+    <link href="byte-size.css" rel="stylesheet" type="text/css">
+    <script>
+    function _drawszlider(ossz, meik){
+        var szazalek=Math.round((meik*100)/ossz);
+        document.getElementById("szliderbar").style.width=szazalek+'%';
+        document.getElementById("szazalek").innerHTML=szazalek+'%';
+    }
+    </script>
+</head>
+<body onload="_drawszlider(100, 0);">
+<script>
+
+    // GLOBALS
+    var accessToken;                 // the FS session ID
+    var runFlag = 'DONOT';           // Indicator Flag to reveal which tool the user picked
+    var dupFlag = "NO";
+    var selectedId;                  // the desired Id to process
+    var theTimer;                    // the timer for  the progress bar
+    var ossz = 100;                  // length of the progress bar
+    var meik = 0;                    // current position or value of the progress bar
+    var numAncestorGen;              // number of Ancestor Generations to process
+    var genCounter = -1;             // generation counter
+    var displayGen = 0;              // display number of the gen being processed
+    var numDescendantGen;            // number of Descendant Generations to process
+    var descendantGenNumber = -1;    // number of the generation being processed
+    var numAncestors = 100;          // number of Relatives to process
+    var todaysDate = new Date();     // the date today
+    var yearLimit = todaysDate.getFullYear() - 110; // set the 110 year rule
+    var selectedName;                // the name of the selected Id
+    var pidArray  = [];              // array of unique PersonIDs of an ancestor's spouse(s) and descendants
+    var nameArray = [];              // array of person names
+    var genderArray = [];            // array of person genders
+    var lifeSpanArray = [];          // array of person lifespans
+    var numUniquePid = 0;            // number of unique PIDs
+    var maleAncestorArray = [];      // array of person ids of selected male ancestors
+    var gen0Pid = [];                // Array of PIDs of generation 0
+    var principalPidArray = [];      // array of person PIDs in a generation
+    var iPrincipalPid = 0;           // counter of persons in a generation
+    var pidCounter = -1;             // pid counter for principalPidArray
+    var iPid = 0;                    // counter of unique PIDs in a generation
+    var primePidArray = [];          // array of prime selected descendants
+    var primeCounter = -1;          // couple counter for primePidArray
+    var couplePidArray = [];         // array of PIDs of husbands in a generation
+    var coupleIdArray = [];          // array of PIDs of husbands in a generation
+    var coupleId = '        _        '; // combined husbandId and wifeId
+    var numCouples = 0;              // number of a person's spouses
+    var spousePidArray = [];         // array of PIDs of spouses in a generation
+    var iSpouse = 0;                 // counter of spouses in a generation
+    var childPidArray = [];          // array of PIDs of children in a generation
+    var iChild = 0;                  // counter of children in a generation
+    var newTitle = '';               // the new record hint collection generalized title
+    var indicatorNameArray = [];     // array of names
+    var indicatorGenderArray = [];   // array of genders
+    var indicatorLifeArray = [];     // array of life spans
+    var personQualSugg = [];         // array of person-couple data quality suggestions
+    var personResearchSugg = [];     // array of person-couple research suggestions
+    var personOtherSugg = [];        // array of person-couple other suggestions
+    var coupleQualSugg = [];         // array of couple data quality suggestions
+    var coupleResearchSugg = [];     // array of couple research suggestions
+    var coupleOtherSugg = [];        // array of couple other suggestions
+    var parentQualSugg = [];         // array of parent data quality suggestions
+    var parentResearchSugg = [];     // array of parent research suggestions
+    var parentOtherSugg = [];        // array of parent other suggestions
+    var childQualSugg = [];          // array of child data quality suggestions
+    var childResearchSugg = [];      // array of child research suggestions
+    var childOtherSugg = [];         // array of child other suggestions
+    var ordCnt = [];                 // array of counts of ordinances to be done
+    var recHintCnt = [];             // array of record hint counts
+    var suggCnt = [];                // array of research suggestion counts
+    var dataCorrCnt = [];            // array of data correction counts
+    var kidCnt = [];                 // array of number of children
+    var generationChildCount = 0;         // total Children count
+    var totalRecHints = 0;           // total Record Hint count
+    var totals = [];                 // array of totals of the indicators
+    var doneFlag = 'NO';             // rh "YES" means found enough ancestors so go to record hints
+    var printIt = '';                // output for the user screen
+    var printOutput = '';            // output for the user screen
+
+// main run function
+function _run(runFlag) {
+    var user, userId, userName;
+    var selectedPerson;
+    console.log('STARTING run().');
+    theTimer = setInterval(function () {meik ++; if(meik >= 100){meik=2;} _drawszlider(ossz,meik);}, 1000);
+    //
+    // User sign in
+    //
+    output('<br><b>Please sign in to FamilySearch . . .</b>');
+    FamilySearch.getAccessToken().then(function(response) {
+        accessToken = response;
+        //
+        // get the information about the user
+        //
+        FamilySearch.getCurrentUser().then(function (response) {
+            user = response.getUser();
+            userId = user.personId;
+            userName = user.contactName;
+            console.log('    _getCurrentUser found ' + userId + ' ' + userName + '.');
+            nameArray[userId] = userName;
+            output('<br>Hi ' + userName + '. Thank you for trying our tool! Please see your results below . . . <br>');
+            //
+            // get the information from the input user form
+            //
+            var idString = runFlag + 'Form.' + runFlag + 'Pid.value';
+            //console.log('idString=' + idString);
+            selectedId = eval(idString);
+            //console.log('selectedId=' + selectedId + '.');
+            // if selectedId from the form is empty then use the current user
+            if (selectedId == '') {
+                selectedId = userId;
+                selectedName = userName;
+                console.log('SelectedId is empty, Using userId.');
+            } else {
+                FamilySearch.getPerson(selectedId).then(function (response) {
+                    selectedPerson = response.getPerson(selectedId);
+                    selectedName = selectedPerson.$getDisplayName();
+                    console.log('Requested Id: ' + selectedId + ' is ' + selectedName + '.');
+                    nameArray[selectedId] = selectedName;
+                    //
+                    // what if the selected ID is bad ???????
+                    //
+                });
+            }
+            //console.log('runFlag=' + runFlag);
+            // switch to the requested tool
+            switch (runFlag) {
+                case 'eol': _eolRun();
+                    break;
+                case 'dup': _dupRun();
+                    break;
+                case 'rh': _rhRun();
+                    break;
+                case 'mem': _memRun();
+                    break;
+                case 'ind': _indRun();
+                    break;
+                case 'pri': _priRun();
+                    break;
+                case 'pik': _pikRun();
+                    break;
+                default: output('<br />ERROR Unrecognized Tool. Please reload your screen.');
+            }
+        })
+    })
+}
+// run the Prime Descendants Tool
+function _priRun(){
+    console.log('STARTING _priRun(' + selectedId + ').');
+    // validate the user input
+    numAncestorGen = priForm.priNumAncestorGen.value;
+    if (numAncestorGen < 1) {
+        numAncestorGen = 1;
+    }
+    else if (numAncestorGen > 4) {
+        numAncestorGen = 4;
+    }
+    console.log('    Received ' + numAncestorGen + ' Ancestor Generation(s).');
+    numDescendantGen = priForm.priNumDescendantGen.value;
+    if (numDescendantGen < 1) {
+        numDescendantGen = 1;
+    }
+    else if (numDescendantGen > numAncestorGen) {
+        numDescendantGen = numAncestorGen;
+    }
+    console.log('    Received ' + numDescendantGen + ' Descendant Generation(s).');
+    // This is a message to the user to wait
+    //
+    output('  Finding the ancestors of ' + selectedId
+        //+ ' ' + selectedName + '. . .');
+    +'.&nbsp;Please wait . . . ');
+    var selectedPidArray = [selectedId];       // initial array to start finding ancestors
+    //console.log('CALLING _priGetAllAncestors(' + selectedPidArray + ')');
+        //' accessToken=' + accessToken);
+    _priGetAllAncestors(selectedPidArray, numAncestorGen).then(function (response) {
+        //
+        // get the ancestors
+        // THEN
+        // output the list of ancestors found
+        //
+        //output('response=', response);
+        console.log(' ');
+        console.log('GENERATION ' + numAncestorGen + ' FOUND ' + response.length + ' ANCESTERS OF ' + selectedId + ' ' + selectedName + '.');
+        printIt = '<table id="ancestorOutput"><tr><td><b>Ancestors of ' + selectedId + '</b></td></tr>';
+        console.log(' ');
+        console.log(' Ancestors of ' + selectedId);
+        for (var i = 0; i < response.length; i++) {
+            printIt += '<tr><td>&nbsp;&nbsp;&nbsp;&nbsp;Generation ' + i + ':';
+            console.log('Generation ' + i + ':' + response[i]);
+            //console.log(' response[' + i + '].length=' + response[i].length);
+            for (var j = 0; j < response[i].length; j++) {
+                var displayAnc = j + 1;
+                printIt += '<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ancestor ' + displayAnc + ': '
+                    + response[i][j] + ' ' + nameArray[response[i][j]]  + ' (' + lifeSpanArray[response[i][j]] + ')';
+                console.log('    Ancestor ' + displayAnc + ':'
+                    + response[i][j] + ' ' + nameArray[response[i][j]]  + ' (' + lifeSpanArray[response[i][j]] + ')');
+            }
+        }
+        printIt += '</tr></table>';
+        output(printIt);
+        //console.log(printIt);
+        printIt = ''; // prepare for new output
+        //console.log('Process the males of the oldest Generation of Ancestors (' + maleAncestorArray + ').');
+        // here we only want the males of the last generation moved to childPidArray
+        for (coupleCounter = 0; coupleCounter < maleAncestorArray.length; coupleCounter++) {
+            childPidArray.push(maleAncestorArray[coupleCounter]);
+        }
+        // find the families of the last generation
+        //output('<br>For Generation ' + numAncestorGen + ' finding ' + numDescendantGen + ' Generation(s) of Descendant Couples');
+        //onsole.log('CALLING _priFindGeneration [' + childPidArray + ']');
+        _priFindGeneration();
+        // THEN
+        // get the census record hints for the selected descendants
+    })
+}
+// Prime Descendants Tool - Get all the Ancestors with Dallan's program
+function _priGetAllAncestors(personIds, generations) { // find the ancestors
+    var fatherId, motherId, father, selectedPerson;
+    dupFlag = "NO";                     // NO=Not a duplicate; YES= it is a duplicate
+    displayGen = numAncestorGen - generations;
+    console.log(' ');
+    console.log('STARTING _priGetAllAncestors for Generation ' + displayGen + ' (' + personIds + ')');
+    //output('<br />STARTING _priGetAllAncestors[generation' + generations + ':' + personIds + '.');
+    //output('<br />Last maleAncestorArray=' + maleAncestorArray);
+    //
+    // base case
+    if (generations === 0) {
+        // when jQuery.when is called with a single parameter, it returns a promise
+        // that is resolved immediately
+        return jQuery.when([personIds]);
+    }
+    maleAncestorArray = []; // blank out for the new generations
+    // create an array of promises - one for each male
+    // each promise returns an array of that person's parentIds (fathers + mothers)
+    var promises = [];
+    for (var i = 0; i < personIds.length; i++) {
+        selectedPerson = personIds[i];
+        //console.log('  Pushing promise for ' + i + ':' + selectedPerson);
+        promises.push(FamilySearch.getParents(selectedPerson).then(function (response) {
+            //    get the Parents
+            //    THEN
+            //    save the Parents
+            var parentIds = [];
+            var relationships = response.getChildAndParentsRelationships();
+            for (var j = 0; j < relationships.length; j++) {
+                var relationship = relationships[j];
+                fatherId = relationship.$getFatherId();
+                if (!!fatherId) {
+                    console.log('  Found Father=' + fatherId + ' of ' + relationship.$getChildId());
+                    // check for duplicates in parentIds
+                    //dupFlag = "NO";
+                    //console.log('parentIds=' + parentIds;
+                    //for (var h = 0; h < parentIds.length; h++) {
+                        //console.log(' Checking ' + fatherId+ ' against ' + parentIds[h]);
+                        //if (fatherId == parentIds[h]) {
+                            //dupFlag = "YES";
+                            //console.log('  Father ' + fatherId + ' is a Duplicate');
+                            //} else {console.log('Father ' + fatherId + ' is a NOT Duplicate');}
+                        //}
+                    //}
+                    //console.log('  Father is a Duplicate? ' + dupFlag);
+                    if (dupFlag == "NO") {// Father is unique
+                        //console.log('    Pushing unique fatherId to parentsIds[' + fatherId + '] of ' + relationship.$getChildId());
+                        parentIds.push(fatherId);
+                        maleAncestorArray.push(fatherId);
+                        nameArray[fatherId] = ' ';
+                        lifeSpanArray[fatherId] = ' ';
+                        //console.log('    Pushing male ' + fatherId);
+                        fatherGotPerson = response.getPerson(fatherId);
+                        if (!!fatherGotPerson) {
+                            if (fatherGotPerson.$getDisplayName() === undefined) {
+                                nameArray[fatherId] = 'UNKNOWN';
+                            } else {
+                                nameArray[fatherId] = fatherGotPerson.$getDisplayName();
+                            }
+                            if (fatherGotPerson.$getDisplayLifeSpan() === undefined) {
+                                lifeSpanArray[fatherId] = '    -    ';
+                            } else {
+                                lifeSpanArray[fatherId] = fatherGotPerson.$getDisplayLifeSpan();
+                            }
+                            //console.log('    Stored to nameArray[' + fatherId + '] is ' + nameArray[fatherId]
+                            //+ ' lifeSpanArray(' + lifeSpanArray[fatherId] + ').');
+                        }
+                    }
+
+                    motherId = relationship.$getMotherId();
+                    if (!!motherId) {
+                        console.log('      Found Mother=' + motherId + ' of ' + relationship.$getChildId());
+                        // check for duplicates in parentIds
+                        dupFlag = "NO";
+                        for (var g = 0; g < parentIds.length; g++) {
+                            if (motherId == parentIds[g]) {
+                                dupFlag = "YES";
+                                //console.log('      Mother ' + motherId + ' is a Duplicate');
+                            }
+                        }
+                        //console.log('  Mother is a Duplicate? ' + dupFlag);
+                        if (dupFlag == "NO") {// she is unique
+                            //console.log('        Pushing unique motherId to parentsIds[' + motherId + '] of ' + relationship.$getChildId());
+                            parentIds.push(motherId);
+                            // initialize
+                            nameArray[motherId] = ' ';
+                            lifeSpanArray[motherId] = ' ';
+                            motherGotPerson = response.getPerson(motherId);
+                            if (!!motherGotPerson) {
+                                if (motherGotPerson.$getDisplayName() === undefined) {
+                                    nameArray[motherId] = 'UNKNOWN';
+                                } else {
+                                    nameArray[motherId] = motherGotPerson.$getDisplayName();
+                                }
+                                if (motherGotPerson.$getDisplayLifeSpan() === undefined) {
+                                    lifeSpanArray[motherId] = '    -    ';
+                                } else {
+                                    lifeSpanArray[motherId] = motherGotPerson.$getDisplayLifeSpan();
+                                }
+                                //console.log('        Stored to nameArray[' + motherId + '] is ' + nameArray[motherId]
+                                //+ ' lifeSpanArray(' + lifeSpanArray[motherId] + ').');
+                            }
+                        }
+                    }
+                }
+                return parentIds;
+            }
+        }));
+    }
+    return jQuery.when.apply(null, promises).then(function () {
+        // the "arguments" passed to this function holds an array of responses
+        // each response is the array of parentIds from above
+        displayGen = numAncestorGen - generations;
+        console.log('PROMISES COMPLETE FOR GENERATION ' + displayGen + '. Found ' + arguments.length + ' parent couples.');
+        var allParentIds = [];
+        for (var i = 0; i < arguments.length; i++) {
+            //console.log('      Retrieved i=' + i + ' arguments[i]=' + arguments[i]);
+            if (arguments[i] === undefined) { //skip the generation if there are no parents
+            } else {
+                for (var j = 0; j < arguments[i].length; j++) {
+                    if (arguments[i][j] === undefined) { //skip the entry if there are no parents
+                    } else {
+                        if (allParentIds.indexOf(arguments[i][j]) === -1) {// skip duplicate couples
+                            //console.log('            Pushing to allParentIds(' + arguments[i][j] + ')');
+                            allParentIds.push(arguments[i][j]);
+                        }
+                    }
+                }
+            }
+        }
+        // return a promise for the passed-in personIds concat'd with allAncestorIds
+        return _priGetAllAncestors(allParentIds, generations - 1).then(function (allAncestorIds) {
+            return [personIds].concat(allAncestorIds);
+        })
+    })
+}
+// Prime Descendants Process Generations-  childPidArray is given to this function; it produces the primeArray
+function _priFindGeneration() {
+    // In the beginning the oldest gen of males is handed to this function as the children in childPidArray
+    // subsequent generations use the previous generation's children in childPidArray
+    // they are loaded into principalArray to find their spouses and children
+    generationChildCount= 0;           // counter for the total number of children
+    genCounter ++;                 // counter for the current generation number
+    displayGen = numAncestorGen - genCounter;
+    console.log(' ');
+    console.log('STARTING _priFindGeneration ' + displayGen + '[' + childPidArray + '] Counted ' + childPidArray.length
+        + ' ancestors in this generation.');
+    //    + ' accessToken=' + accessToken);
+    if (genCounter < numDescendantGen) { // count thru the generations
+        //output('<br>Generation ' + displayGen + ' has ' + childPidArray.length + ' couples  . . . ');
+        //move the children into principalPidArray for finding their spouses
+        principalPidArray = [];        //empty the principalPidArray
+        for (var i = 0; i < childPidArray.length; i++) {
+            principalPidArray[i] = childPidArray[i];
+        }
+        // get the families
+        //console.log('CALLING _priFindCouples for each (' + principalPidArray);
+        //for (i = 0; i < principalPidArray.length; i++) {
+            //console.log('  ' + principalPidArray[i]);
+        //}
+        pidCounter = -1;
+        _priFindCouples();
+        // wait for this generation to finish finding families
+        //setTimeout(function () {console.log('Waited for');}, 20000);}
+        // THEN
+        // Find the record hints
+    } else {
+        printIt = '<table id="priOutput"><tr><td id="priOutputTitle" colspan=2><b>Record Hints for the relatives of ' + selectedId +'</b></td></tr>' // Output Table Title
+        + '<tr><td>Person</td><td>Record Hint</td></tr>';
+        output('<br>Processing ' + primePidArray.length + ' relatives looking for 1880-1910 US Census Record Hints. . .');
+        console.log('CALLING _priFindRecordHints for ' + principalPidArray.length + '. Please wait . . . ');
+        primeCounter = -1;
+        _priFindRecordHints();
+    }
+}
+//  Prime Descendants Find the Couples -  process the next "principal PID" or list of ancestors
+function _priFindCouples() {
+    pidCounter ++;
+    console.log('  STARTING _priFindCouples(' + pidCounter + ':' + principalPidArray[pidCounter] + ') of ' + principalPidArray.length + '.');
+    //' accessToken=' + accessToken);
+    if (pidCounter < principalPidArray.length) {
+        console.log('  CALLING _priGetCouples(' + principalPidArray[pidCounter] + ')');
+        _priGetCouples(principalPidArray[pidCounter]);
+    }
+    // get the couples
+    // THEN
+    // find their children
+    else {
+        coupleCounter = -1;
+        output('<br />' + coupleIdArray.length + ' Couples found for Generation ' + displayGen + ' . . .');
+        //+ ' (' + coupleIdArray + '). Finding their children . . . ');
+        console.log(' ');
+        console.log('CALLING _priFindChildren(' + coupleIdArray + ')');
+        _priFindChildren();
+    }
+}
+//  Prime Descendants - find the couple's children
+function _priFindChildren() {
+    coupleCounter++;
+    console.log('STARTING _priFindChildren(Couple ' + coupleCounter + ':' + coupleIdArray[coupleCounter] + ')');
+    if (coupleCounter < coupleIdArray.length && doneFlag == 'NO') {
+         console.log('  CALLING _priGetChildren(' + coupleIdArray[coupleCounter] + ')');
+        _priGetChildren(coupleIdArray[coupleCounter]);
+    }
+    //
+    // get the children
+    // THEN
+    // return to find Descendants
+    else {
+        output('<br />' + generationChildCount + ' children found for Generation ' + displayGen + ' . . .');
+        _priFindGeneration();
+    }
+}
+//   Prime Descendants -  Find record hints for the prime ancestors and print them out
+function _priFindRecordHints() {
+    var primeId;
+    primeCounter ++;
+    console.log('STARTING _priFindRecordHints(' + primeCounter + ':' + primePidArray[primeCounter] + ')');
+    if (primeCounter < primePidArray.length) {
+        primeId = primePidArray[primeCounter];
+        //console.log('  CALLING _priGetRecordHints(' + primeId + ')');
+        _priGetRecordHints(primeId);
+        //
+        // get the record hints and screen them
+        // THEN
+        // Print the record hints
+    } else {
+        //
+        // first wait for the get Record Hints to finish
+        //
+        setTimeout(function () {
+            printIt += '</table>';
+            //if (totRecHintCount > 0) {
+            output(printIt);
+            clearInterval(theTimer);
+            _drawszlider(100,100);
+            //}
+        }, 20000);
+    }
+}
+//   Prime Descendants -  get the spouses of a person and their hints
+function _priGetCouples(pid) {
+    var theUrl = 'https://familysearch.org/tree-data/descendancy/'
+            + pid + '/spouses?fsSessionId=' + accessToken;
+    //console.log('theUrl=' + theUrl);
+    var numSpouses = 0;
+    var personPid, spousePid, coupleNum, theBirth;
+    dupFlag = "NO";                 // NO=Not a duplicate; YES= it is a duplicate
+    console.log('    STARTING find the spouses _priGetCouples(' + pidCounter + ':' + pid + ')');
+    //  + ' accessToken=' + accessToken);
+    //console.log('<br /> theURL=' + theUrl);
+    // retrieve the spouses data
+    $.getJSON(theUrl, function (result) {
+        //
+        //THEN
+        //
+        //console.log('<br />gotCouples(' + pid + ')=' + result);
+        if (result != null) {
+            $.each(result, function (key, val) {
+                if (key == 'data') {
+                    if (val != null) {
+                        numSpouses = val.length;
+                        console.log('    Found ' + numSpouses + ' spouse(s) of ' + pid + ':');
+                        // for each spouse:
+                        $.each(val, function (spousesKey, spousesVal) {
+                            //console.log('spousesKey:spousesVal is ' + spousesKey + ':' + spousesVal);
+                            coupleNum = spousesKey + 1;
+                            //console.log('      Couple ' + coupleNum + ':');
+                            $.each(spousesVal, function (spouseDataKey, spouseDataVal) {
+                                // get person's data (not the spouse)
+                                if (spouseDataKey == 'person') {
+                                    $.each(spouseDataVal, function (personKey, personVal) {
+                                        if (personKey == 'id') {//this id should be the same as pid
+                                            //console.log('Husband Id:' + personVal);
+                                            personPid = personVal;
+                                            printIt = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Couple ' + coupleNum + ': ' + personPid;
+                                            //console.log('<br />&nbsp;&nbsp;&nbsp;&nbsp;Couple: ' + personPid);
+                                            // check for duplicates in primePidArray
+                                            dupFlag = "NO";
+                                            for (var h = 0; h < primePidArray.length; h++) {
+                                                if (personPid == primePidArray[h]){dupFlag = "YES";}
+                                            }
+                                        } else {
+                                            if (personKey == 'name') {
+                                                nameArray[personPid] = personVal;
+                                                printIt += ' ' + nameArray[personPid];
+                                                //output(' ' + nameArray[personPid]);
+                                                //console.log('    Name:' + personVal);
+                                            } else {
+                                                if (personKey == 'gender') {
+                                                    genderArray[personPid] = personVal;
+                                                    printIt +=  ' ' + genderArray[personPid];
+                                                    //output(' ' + genderArray[personPid]);
+                                                } else {
+                                                    if (personKey == 'lifeSpan') {
+                                                        lifeSpanArray[personPid] = personVal;
+                                                        printIt += ' (' + lifeSpanArray[personPid] + ')';
+                                                        //output(' ' + lifeSpanArray[personPid]);
+                                                        // skip the duplicates
+                                                        if (dupFlag == "NO") {// spouse is unique
+                                                            // check the birthday
+                                                            theBirth = personVal.split('-', 1);
+                                                            if (!isNaN(theBirth)) {
+                                                                if (theBirth >= 1840 && theBirth <= 1905) {
+                                                                    // put him in Prime
+                                                                    primePidArray.push(personPid);
+                                                                    console.log('      ' + personPid + ' ' + nameArray[personPid] + ' born:' + theBirth + ' qualified.');
+                                                                    //' primePidArray=' + primePidArray);
+                                                                } else {
+                                                                    console.log('      ' + personPid + ' ' + nameArray[personPid] + ' born:' + theBirth + ' not in range');
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    })
+                                } else {
+                                    // get the spouse's data
+                                    if (spouseDataKey == 'spouse') {
+                                        //console.log('Found spouse:spouseDataVal=' + spouseDataVal);
+                                        if (spouseDataVal != null) {
+                                            $.each(spouseDataVal, function (spouseKey, spouseVal) {
+                                                //output('<br />spouseKey:spouseVal=' + spousesKey + ':' + spouseDataVal);
+                                                if (spouseKey == 'id') {
+                                                    if (spouseVal != null) {
+                                                        spousePid = spouseVal;
+                                                        printIt += ' & ' + spousePid;
+                                                        //output(' and ' + spousePid);
+                                                        // check for duplicates in primePidArray
+                                                        dupFlag = "NO";
+                                                        for (var h = 0; h < primePidArray.length; h++) {
+                                                            if (spousePid == primePidArray[h]){dupFlag = "YES";}
+                                                        }
+                                                    }
+                                                } else {
+                                                    if (spouseKey == 'name') {
+                                                        nameArray[spousePid] = spouseVal;
+                                                        printIt += ' ' + nameArray[spousePid];
+                                                        //output(' ' + nameArray[spousePid]);
+                                                        //console.log('    Name:' + spouseVal);
+                                                    } else {
+                                                        if (spouseKey == 'gender') {
+                                                            genderArray[spousePid] = spouseVal;
+                                                            printIt += ' ' + genderArray[spousePid];
+                                                            //output(' ' + genderArray[spousePid]);
+                                                            //console.log('    Gender:' + spouseVal);
+                                                        } else {
+                                                            if (spouseKey == 'lifeSpan') {
+                                                                lifeSpanArray[spousePid] = spouseVal;
+                                                                printIt += ' (' + lifeSpanArray[spousePid] + ').';
+                                                                //output(' ' + lifeSpanArray[spousePid]);
+                                                                // skip the duplicates
+                                                                if (dupFlag == "NO") {// spouse is unique
+                                                                    // check the birthday
+                                                                    theBirth = spouseVal.split('-', 1);
+                                                                    if (!isNaN(theBirth)) {
+                                                                        if (theBirth >= 1840 && theBirth <= 1905) {
+                                                                            primePidArray.push(spousePid);
+                                                                            console.log('      ' + spousePid + ' ' + nameArray[spousePid] + ' born:' + theBirth + ' qualified.');
+                                                                            //' primePidArray=' + primePidArray);
+                                                                        } else {
+                                                                            console.log('      ' + spousePid + ' ' + nameArray[spousePid] + ' born:' + theBirth + ' not in range');
+                                                                        }
+                                                                    }
+                                                                }
+                                                                //
+                                                                // save the couple for finding the children
+                                                                coupleId = pid + '_' + spousePid;
+                                                                coupleIdArray.push(coupleId);
+                                                                //console.log('' + printIt);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            });
+                                            //} else {
+                                            //output('<br /><font color="Red">MINOR PROBLEM No spouse for ' + pid + ' ' + nameArray[pid] + '.</font>');
+                                            //}
+                                        }
+                                    }
+                                }
+                            })
+                        })
+                    }
+                }
+            });
+            // get the next couple
+            _priFindCouples();
+        }
+    });
+}
+//   Prime Descendants -  get the children given a couple combo id - save them in primeArray
+function _priGetChildren(coupleId) {
+    var childId, childNum, theBirth;
+    var childIdArray = [];
+    var theUrl = 'https://familysearch.org/tree-data/descendancy/' + coupleId + '/children?fsSessionId=' + accessToken;
+    //console.log('<br /> URL=' + theUrl);
+    console.log('    STARTING _priGetChildren(' +  coupleId + ')');
+    // retrieve the children data
+    $.getJSON(theUrl, function (result) {
+        //
+        // get the children
+        // THEN
+        // qualify the children
+        if (result != null) {
+            //console.log('Children of ' + coupleId + ':');
+            $.each(result, function (key, val) {
+                if (key == 'data') {
+                    $.each(val, function (dataKey, dataVal) {
+                        // retrieve the children data
+                        if (dataKey == 'children') {
+                            if (dataVal != null) {
+                                var numChildren = dataVal.length;
+                                if (numChildren > 0) {
+                                    generationChildCount += numChildren;
+                                    console.log('           Couple ' + coupleCounter + '(' + coupleId + ') have ' + numChildren + ' children.');
+                                    output('<br />&nbsp;&nbsp;&nbsp;&nbsp;Couple ' + coupleCounter + ' : ' + coupleId + ' have ' + numChildren + ' children.');
+                                    // for each child:
+                                    for (var i = 0; i < numChildren; i++) {
+                                        $.each(dataVal, function (childrenKey, childrenVal) {
+                                            if (childrenKey == i) {
+                                                printIt = '';
+                                                childNum = i + 1;
+                                                // get the child data
+                                                $.each(childrenVal, function (childKey, childVal) {
+                                                    if (childKey == 'id') {
+                                                        childId = childVal;
+                                                        printIt += '    ' + childId;
+                                                        // check for duplicates in primePidArray
+                                                        dupFlag = "NO";
+                                                        for (var h = 0; h < primePidArray.length; h++) {
+                                                            if (childId == primePidArray[h]){dupFlag = "YES";}
+                                                        }
+                                                        //console.log('    Child ' + childNum + ':' + childId);
+                                                    } else {
+                                                        if (childKey == 'name') {
+                                                            nameArray[childId] = childVal;
+                                                            printIt += ' ' + nameArray[childId];
+                                                            //console.log('        Name:' + childVal);
+                                                        } else {
+                                                            if (childKey == 'gender') {
+                                                                genderArray[childId] = childVal;
+                                                                printIt += ' ' + genderArray[childId];
+                                                                //console.log('        Gender:' + childVal);
+                                                            } else {
+                                                                if (childKey == 'lifeSpan') {
+                                                                    lifeSpanArray[childId] = childVal;
+                                                                    printIt +=  ' (' + lifeSpanArray[childId] + ').';
+                                                                    //console.log('        Lifespan:(' + childVal + ')');
+                                                                    // skip the duplicates
+                                                                    if (dupFlag == "NO") {// child is unique
+                                                                        // check the birthday
+                                                                        theBirth = childVal.split('-', 1);
+                                                                        //console.log('Child Birth=' + theBirth);
+                                                                        if (!isNaN(theBirth)) {
+                                                                            if (theBirth >= 1840 && theBirth <= 1905) {
+                                                                                primePidArray.push(childId);
+                                                                                childPidArray.push(childId);
+                                                                                console.log('               Child ' + childNum + ':' + childId + ' ' + nameArray[childId] + ' born:' + theBirth + ' qualified.');
+                                                                                //' primePidArray=' + primePidArray);
+                                                                            } else {
+                                                                                console.log('               Child ' + childNum + ':' + childId + ' ' + nameArray[childId] + ' born:' + theBirth + ' not in range');
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                });
+                                                //console.log('' + printIt);
+                                            }
+                                        });
+                                    }
+                                } else {
+                                    console.log('           Couple ' + coupleCounter + '(' + coupleId + ') have 0 children.');
+                                    output('<br />&nbsp;&nbsp;&nbsp;&nbsp;Couple: ' + coupleId + ' have 0 children.');
+                                }
+                            }
+                        }
+                    })
+                }
+            });
+            _priFindChildren();
+        }
+    });
+}
+//  Prime Descendants -   get the record hints
+function _priGetRecordHints(pid) {
+    var printRow = '';
+    var holdConfidence = '';
+    var holdScore = '';
+    var foundCensusFlag = 'NO';
+    console.log('    STARTING _priGetRecordHints(' + primeCounter + ':' + pid + ')');
+    var theUrl = 'https://familysearch.org/tree-data/record-matches/' + pid + '?fsSessionId=' + accessToken;
+    //output(' theUrl=' + theUrl);
+//        var personRecHintCount = 0;
+//        if (totRecHintCount > 9) {// Quit: found enough record hints
+//            doneFlag = 'YES';
+//            console.log('Found ' + totalRecHints + ' record hints. Done.');
+//        } else {
+//            if ((coupleCounter + 1) == numAncestors) {// This is the last relative; Quit
+//                doneFlag = 'YES';
+//                console.log('Found the last relative.');
+//           } else {
+    $.getJSON(theUrl, function (result) {
+        //console.log('***gotJSON(' + pid + ')' + ' PrintRow=' + printRow);
+        //output('<br />gotJSON for ' + pid + ' ' + pid + ' of ' + numAncestors + '.');
+        if (result != null) {
+            //output(' Result is not null');
+            $.each(result, function (key, val) {
+                if (key == 'data') {
+                    //console.log('Found data val=' + val);
+                    //output(' Found the data val=' + val);
+                    $.each(val, function (dataKey, dataVal) {
+                        if (dataKey == 'matches') {
+                            //output('<br />Found matches dataVal=' + dataVal + '.');
+                            if (dataVal == '') {
+                                //console.log('Found no matches dataVal=null');
+                                //output(' Found no matches dataVal is empty');
+                            } else { // found a Record Hint
+                                //console.log('Found matches dataVal=' + dataVal);
+                                //output('<br />Found matches dataVal=' + dataVal);
+                                $.each(dataVal, function (suggKey, suggVal) {
+                                    //console.log('  Found suggKey=' + suggKey + ' suggVal=' + suggVal);
+                                    printRow = '<tr>' + '<td id="priOutput"><a  target="_blank"  href="https://familysearch.org/tree/#view=ancestor&person='
+                                    + pid + '">' + pid + ' ' + nameArray[pid] + '</a>'
+                                    + '<br />' + '(' + lifeSpanArray[pid] + ')</td>';
+                                    $.each(suggVal, function (suggRKey, suggRVal) {
+                                        //console.log('    Found suggRKey=' + suggRKey + ' suggRVal=' + suggRVal);
+                                        if ( suggRKey == 'personName'){
+                                            printRow += '<td id="priOutput">' + suggRVal + ' in <br /><a  target="_blank"  href="';
+                                        } else {
+                                            if (suggRKey == 'recordUrl') {
+                                                //
+                                                // how about direct to the matching url
+                                                //
+                                                printRow += suggRVal + '"> ';
+                                            } else {
+                                                if (suggRKey == 'collectionTitle' &&
+                                                        (suggRVal == 'United States Census, 1880' ||
+                                                        suggRVal == 'United States Census, 1900' ||
+                                                        suggRVal == 'United States Census, 1910')) {
+                                                    printRow += ' ' + suggRVal;
+                                                    console.log(' Census Found - Collection Title: ' + suggRVal + ' printRow=' + printRow);
+                                                    foundCensusFlag = 'YES';
+                                                    printRow += '</a></td></tr>';
+                                                    console.log('' + printRow);
+                                                    printIt += printRow;
+                                                } else {
+                                                    foundCensusFlag = 'NO';
+                                                    console.log('  Record Hint suggRKey:' + suggRKey + ':' + suggRVal);
+                                                }
+                                            }
+
+                                        }
+                                    });
+                                });
+                            }
+                        }
+                    })
+                }
+            })
+        }
+    });
+    _priFindRecordHints();
+}
+// run the pick an ancestor tool
+function _pikRun() {
+    console.log('STARTING _pikRun.');
+    FamilySearch.getAccessToken().then(function(accessToken) {
+        FamilySearch.getCurrentUser().then(function (response) {
+            var user = response.getUser();
+            output('<p /> Name:' + user.displayName + '<br /> Pid: ' + user.personId
+            );
+            _pikTraverse_1(user.personId, accessToken);
+        })
+    })
+}
+// Pick an Ancestor traverse the tree 1
+function _pikTraverse_1(startPid, accessToken) {
+    var i = 0;
+    var iAncestor = 0;
+    var pid = [];
+    var name = [];
+    var lifeSpan = [];
+    var relation = [];
+    var traversal_1 = FSTraversal(FamilySearch)
+        .limit(32)
+        .order('ancestry')
+        .concurrency(1)
+        .person(function(person, callback) {
+            if (i == 0) {
+                output('<p /> Please be patient. This could take awhile.');
+                output('<p /><b> Male Ancestors Born between 1840 and 1870:</b>');
+            }
+            var birthYear = person.$getDisplayLifeSpan().substring(0,4);
+            if (birthYear > 1840 
+                    && birthYear < 1870 
+                    && person.$getDisplayGender() == 'Male') {
+                pid[iAncestor] = person.id;
+                lifeSpan[iAncestor] = person.$getDisplayLifeSpan();
+                relation = traversal_1.relationshipTo(person.id);
+                output('<br />' + person.$getDisplayName() + ' (' + person.$getDisplayLifeSpan() + ') ' + person.id + ', ' + relation + ' to ' + startPid);
+                iAncestor ++;
+            }
+            i ++;
+        })
+        .done(function() {
+            output('<p /><b> Grandfathers of the above Ancestors:</b>');
+            console.log('Done traverse_1. Getting Grandsons');
+            _pikGetGrandfather(pid, iAncestor, 0, accessToken);
+        });
+    traversal_1.traverse(startPid);
+}
+// Pick an Ancestor get the grandfathers
+function _pikGetGrandfather(pid, nGrandsons, iGrandson, accessToken) {
+    if (iGrandson < nGrandsons) {
+        var startPid = pid[iGrandson];
+        iGrandson ++;
+        _pikTraverse_2(startPid, pid, nGrandsons, iGrandson, accessToken)
+    }
+    else {
+        output('<p /> Done!');
+        console.log('Done traverse_2!');
+    }
+}
+// Pick an Ancestor traverse 2
+function _pikTraverse_2(startPid, pid, nGrandsons, iGrandson, accessToken) {
+    var traverse_2 = FSTraversal(FamilySearch)
+            .limit(10)
+            .order('ancestry')
+            .concurrency(1)
+            .person(function(person, callback) {
+                var relation = traverse_2.relationshipTo(person.id);
+                if (relation == 'grandfather' 
+                        && person.$getDisplayGender() == 'Male') {
+                    output('<br />' + person.$getDisplayName() + ' (' + person.$getDisplayLifeSpan() + ') ' + person.id + ', ' + relation + ' to ' + startPid);
+                }
+            })
+            .done(function() {
+                _pikGetGrandfather(pid, nGrandsons, iGrandson, accessToken);
+            });
+    _pikTraverse_2.traverse(startPid);
+}
+// run the end of line tool
+function _eolRun() {
+    console.log('STARTING _eolRun().');
+    // This is a message to the user to wait
+    output('<br />Finding the end of line Ancestors of ' + selectedId + ' . . .');
+    //+ ' ' + selectedName + ' . . . ');
+    _eolTraverse();
+    //})
+}
+// End of Line Tool - Traverse the Ancestors
+function _eolTraverse() {
+    console.log('  STARTING _eolTraverse for selectedId=' + selectedId + '.');
+    var childNum = 0;
+    var ip = 0;
+    var childId = [];
+    var childName = [];
+    var childLifeSpan = [];
+    var childRelationship = [];
+    var childIdMatch = [];
+    var traversal = FSTraversal(FamilySearch)
+        .limit(50) // number of ancestors to gather
+        .order('ancestry')
+        .concurrency(1)
+        .person(function(person, callback) {
+            childId[childNum] = person.id;
+            childName[childNum] = person.$getDisplayName();
+            childLifeSpan[childNum] = person.$getDisplayLifeSpan();
+            childRelationship[childNum] = traversal.relationshipTo(person.id);
+            // change the relationship for the selected Id
+            if (childRelationship[childNum] == 'yourself') {
+                childRelationship[childNum] = 'Selected Id';
+            }
+            // This is the found ancestor
+            console.log('Ancestor ' + person.id + ':' + person.$getDisplayName() +  ' - ' + childRelationship[childNum] + ' of ' + selectedId);
+            childNum ++;
+        })
+        .parent(function(parent, child){
+            // This is the child of the found ancestor
+            childIdMatch[ip] = child.id;
+            console.log('     ' + child.id + ':' + child.$getDisplayName()  + ' Child of ' + parent.id + ':' + parent.$getDisplayName());
+            ip ++;
+        })
+        .done(function() {
+            //find the Record Hints
+            for (var i = 0; i < childNum; i++) {
+                var matchCount = 0;
+                for (var j = 0; j < ip; j++) {
+                   if (childId[i] == childIdMatch[j]) {
+                        matchCount ++;
+                    }
+                }
+                if (matchCount < 2) {
+                    // print the end of line ancestors
+                    output('<br />&nbsp;&nbsp;&nbsp;' + childRelationship[i] + ': ' + childId[i] + ' ' + childName[i] + ' (' + childLifeSpan[i] + ')');
+                    // call _eolRecordHints for the child
+                    _eolRecordHints(childId[i], childName[i], childLifeSpan[i], childRelationship[i]);
+                }
+            }
+            //
+            // This is a message to the user to wait more time
+            //
+            output('<br>Ancestors Found. Now finding their Record Hints . . .');
+            //
+            // Wait some amount of time and then Send the result to the user
+            //
+            setTimeout(function(){
+                // this is the title of the output box
+                //console.log('before heading printOutput=' + printOutput);
+                printOutput =
+                        //'<html><head><title>Simplify Research End of Line Record Hints</title>' +
+                    //'<link href="eol.css" rel="stylesheet" type="text/css"></head><body>' +
+                    '<p><table id="eolOutput"><tr><td><p>' + totalRecHints +
+                    ' RECORD HINTS FOR ANCESTORS WHO ARE MISSING PARENTS IN THE TREE</p>' + printOutput;
+                    // + '</body></html>';
+                //console.log('after heading printOutput=' + printOutput);
+                //var x=window.open();
+                //x.document.open();
+                //x.document.write(printOutput);
+                //x.document.close();
+                printOutput += '</td></tr></table></p>';
+                output(printOutput);
+                clearInterval(theTimer);
+                _drawszlider(100,100);
+            }, 5000);
+        });
+    traversal.traverse(selectedId);
+}
+// End Of Line Tool  - Get the record hints for the ancestors
+function _eolRecordHints(childPid, childName, childLifeSpan, childRelationship) {
+    console.log('  STARTING _eolRecordHints for childPid=' + childPid + ' ' + childName);
+    var foundFlag = 'NO'; //NO=the person has no record hints   YES=the person does have record hints
+    var printHint = '';
+    var theUrl = 'https://familysearch.org/tree-data/record-matches/' + childPid + '?fsSessionId=' + accessToken;
+    var recHintCnt = 0;
+    $.getJSON(theUrl, function (result) {
+        if (result != null) {
+            $.each(result, function (key, val) {
+                if (key == 'data') {
+                    $.each(val, function (dataKey, dataVal) {
+                        if (dataKey == 'matches') {
+                            if (dataVal == '') {
+                                console.log('Found no matches for ' + childPid + ':' + childName);
+                                //output(' Found no matches dataVal is empty');
+                            } else { // found a Record Hint
+                                foundFlag = 'YES';
+                                newTitle = '';
+                                $.each(dataVal, function (suggKey, suggVal) {
+                                    //console.log('Found Record Hints suggKey=' + suggKey + ' suggVal=' + suggVal + ' for ' + childPid + ':' + childName);
+                                    recHintCnt++;
+                                    if (recHintCnt == 1) {
+                                        totalRecHints++;
+                                        console.log('Found Record Hint ' + recHintCnt + ' for ' + childPid + ':' + childName
+                                            + ' Total Record Hints is ' + totalRecHints + '.');
+                                        $.each(suggVal, function (suggIKey, suggIVal) {
+                                            console.log('    Found suggIKey=' + suggIKey + ':' + suggIVal);
+                                            if (suggIKey == 'personName') {
+                                                printHint += '<br>Name on the Record: ' + suggIVal + ' in ';
+                                            }
+                                            if (suggIKey == 'recordUrl') {
+                                                printHint += ' <a target="_blank" href="' + suggIVal + '">';
+                                            }
+                                            if (suggIKey == 'collectionTitle') {
+                                                _hideCollection(suggIVal);
+                                                //console.log('_hideCollection output=' + newTitle);
+                                                printHint += newTitle + '</a>';
+                                                //console.log('collectionTitle is printHint:' + printHint);
+                                            }
+                                            if (suggIKey == 'score') {
+                                                printHint += '  Score=' + suggIVal;
+                                            }
+                                            if (suggIKey == 'confidence') {
+                                                printHint += '  Confidence=' + suggIVal;
+                                            }
+                                        });
+                                    } else {// this person has more that one record hint
+                                        console.log('SKIPPED the additional Record Hint ' + recHintCnt + ' for ' + childPid + ':' + childName + '.');
+                                        //output('<br>SKIPPED the additional Record Hint for ' + childPid + ':' + childName);
+                                    }
+                                });
+                            }
+                            if (foundFlag == 'YES') {
+                                //
+                                // create a line of output for the Record Hint
+                                //
+                                //console.log('Added this line:' + printHint);
+                                printOutput += '<hr><p><a target="_blank" href="https://familysearch.org/tree/#view=allMatchingRecords&person='
+                                + childPid + '">Record Hint</a> for ' + childPid + ' '
+                                + '<a target="_blank" href="https://familysearch.org/tree/#view=ancestor&person=' + childPid + '">'
+                                + childName + '</a>' + ' (' + childLifeSpan + '), ' + childRelationship + ' of ' + selectedId
+                                + ' ' + printHint + '</p>';
+                            }
+                        }
+                    });
+                }
+            });
+        }
+    })
+}
+// Hide the Collection Name and change it to something generic
+function _hideCollection(theTitle) {
+    if (theTitle.match(/birth/i) != null) {
+        newTitle = 'Birth Collection';
+    } else {
+        if (theTitle.match(/christening/i) != null) {
+            newTitle = 'Christening Collection';
+        } else {
+            if (theTitle.match(/baptism/i) != null) {
+                newTitle = 'Baptism Collection';
+            } else {
+                if (theTitle.match(/marriage/i) != null) {
+                    newTitle = 'Marriage Collection';
+                } else {
+                    if (theTitle.match(/death/i) != null) {
+                        newTitle = 'Death Collection';
+                    } else {
+                        if (theTitle.match(/census/i) != null) {
+                            newTitle = 'Census Collection';
+                        } else {
+                            if (theTitle.match(/obit/i) != null) {
+                                newTitle = 'Obituary Collection';
+                            } else {
+                                if (theTitle.match(/conform/i) != null) {
+                                    newTitle = 'Non-Conformist Collection';
+                                } else {
+                                    if (theTitle.match(/World War I/i) != null) {
+                                        newTitle = 'World War I Collection';
+                                    } else {
+                                        if (theTitle.match(/World War II/i) != null) {
+                                            newTitle = 'World War I Collection';
+                                        } else {
+                                            if (theTitle.match(/Vital/i) != null) {
+                                                newTitle = 'Vital Records Collection';
+                                            } else {
+                                                newTitle = 'UnIdentified Collection';
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+// Run the Duplicates tool
+function _dupRun() {
+    console.log('STARTING _dupRun');
+    // This is a message to the user to wait
+    output('<br />Finding 50 ancestors of ' + selectedId + ' . . .');
+    //+ ' ' + selectedName + '. . .');
+    // Duplicates Tool - traverse the ancestors
+    console.log('  STARTING _duplicates for selectedId=' +  selectedId);
+    var displayCount;
+    var pidArray = [];
+    var birthDateArray = [];
+    var deathDateArray = [];
+    var lifeSpanArray = [];
+    var relationArray = [];
+    var iPid = -1;
+    var traversal = FSTraversal(FamilySearch)
+        .limit(50)
+        .order('ancestry')
+        .concurrency(1)
+        .person(function(person, callback) {
+            iPid ++;
+            displayCount = iPid + 1;
+            console.log('Ancestor ' + displayCount + ' Id:' + person.id + ' ' +  person.$getDisplayName());
+            pidArray[iPid] = person.id;
+            nameArray[iPid] = person.$getDisplayName();
+            console.log(' Name:' + nameArray[iPid]);
+            birthDateArray[iPid] = person.$getBirthDate();
+            console.log(' Birth:' + birthDateArray[iPid]);
+            deathDateArray[iPid] = person.$getDeathDate();
+            console.log(' Death:' + deathDateArray[iPid]);
+            lifeSpanArray[iPid] = person.$getDisplayLifeSpan();
+            console.log(' LifeSpan:' + lifeSpanArray[iPid]);
+            relationArray[iPid] = traversal.relationshipTo(iPid);
+            if (relationArray[iPid] == 'yourself') {
+                relationArray[iPid] = 'Selected Id';
+            }
+            console.log(' Relationship:' + relationArray[iPid] + ' to ' + selectedId);
+            _findDuplicates(pidArray[iPid], nameArray[iPid], birthDateArray[iPid], deathDateArray[iPid]);
+        })
+        .done(function() {
+            //output('<p><b><font color="green"> POTENTIAL DUPLICATES</font></b>');
+            //for (var i=0; i<iPid; i++) {
+            //    _findDuplicates(pidArray[i], nameArray[i], birthDateArray[i], deathDateArray[i], accessToken);
+            //}
+            //
+            // Wait some amount of time for the duplicates to be found
+            //
+            setTimeout(function(){
+                output('<br /><br />Duplicates Tool Done!');
+                clearInterval(theTimer);
+                _drawszlider(100,100);
+            }, 7000);
+        });
+    //output('<table id="dupOutput"><tr><td id=" id="dupOutputTitle">ANCESTOR DUPLICATES</td></tr>');
+    traversal.traverse(selectedId);
+
+}
+// Find the Duplicates Tool - get the matches of the ancestors
+function _findDuplicates(pid, name, birthDate, deathDate) {
+    console.log('  STARTING _findDuplicates for ' + pid + ' ' + name);
+    var iDup = 0;
+    var duplPerson;
+    FamilySearch.getPersonMatches(pid).then(function(response) {
+        var results = response.getSearchResults();
+        if (results.length > 0) {
+            for (var i = 0, len = results.length; i < len; i++) {
+                var result = results[i];
+                duplPerson = result.$getPrimaryPerson();
+                if (result.score > 0.0 && duplPerson.$getBirthDate() != '') {
+                    output('<p><a target="_blank" href="https://familysearch.org/tree/#view=ancestor&person=' + pid
+                    + '">' + pid + '</a> ' + name + ' (' + birthDate + '-'
+                    + deathDate + ')&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;DUPLICATE&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;' + result.id + ' ' + duplPerson.$getDisplayName() +' (' + duplPerson.$getBirthDate()
+                        + ' - ' + duplPerson.$getDeathDate() + ') <b>Score = ' + result.score + '</b></p>');
+                    iDup ++;
+                }
+            }
+        }
+    })
+}
+// run the Record Hint Tool
+function _rhRun() {
+    console.log('STARTING _rhRun().');
+    // validate the user input
+    numAncestorGen = rhForm.rhNumAncestorGen.value;
+    if (numAncestorGen < 1) {
+        numAncestorGen = 1;
+    }
+    else if (numAncestorGen > 4) {
+        numAncestorGen = 4;
+    }
+    console.log('Requested ' + numAncestorGen + ' Ancestor Generation(s).');
+    numDescendantGen = rhForm.rhNumDescendantGen.value;
+    if (numDescendantGen < 1) {
+        numDescendantGen = 1;
+    }
+    else if (numDescendantGen > numAncestorGen) {
+        numDescendantGen = numAncestorGen;
+    }
+    console.log('Requested ' + numDescendantGen + ' Descendant Generation(s) from Ancestor Generation ' + numAncestorGen + '.');
+    //numAncestors = rhForm.rhNumAncestors.value;
+    //
+    // make sure number of Ancestors is a number
+    //output('<br />Searching for ' + numAncestors + ' relatives of ' + selectedId + '.');
+    //
+    // This is a message to the user to wait
+    //
+    output('<br />Finding the ancestors of ' + selectedId
+        //+ ' ' + selectedName + '. . .');
+        + '.&nbsp;Please wait . . . ');
+    //_getUserId();
+    var selectedPidArray = [selectedId];       // initial array to start finding ancestors
+    console.log('CALLING _rhGetAllAncestors(' + selectedPidArray + ') accessToken=' + accessToken);
+    _rhGetAllAncestors(selectedPidArray, numAncestorGen).then(function (response) {
+        //
+        // get the ancestors
+        // THEN
+        // output the list of ancestors found
+        // then get their descendants
+        //
+        //output('response=', response);
+        console.log('_rhGetAllAncestors(' + selectedId + ')is Done!');
+        printIt = '<table id="ancestorOutput"><tr><td><b>Ancestors of ' + selectedId + '</b></td></tr>';
+        for (var i = 0; i < response.length; i++) {
+            printIt += '<tr><td>&nbsp;&nbsp;&nbsp;&nbsp;Generation ' + i + ':';
+            for (var j = 0; j < response[i].length; j++) {
+                printIt += '<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Ancestor: '
+                + response[i][j] + ' ' + nameArray[response[i][j]];
+            }
+        }
+        printIt += '</tr></table>';
+        output(printIt);
+        //console.log(printIt);
+        printIt = ''; // prepare for new output
+        console.log('Process the males of the oldest Generation of Ancestors (' + maleAncestorArray + ').');
+        //
+        // here we only want the males or children of the last generation moved to childPidArray for _rh getDescendants
+        //
+        for (pidCounter = 0; pidCounter < maleAncestorArray.length; pidCounter++) {
+            childPidArray.push(maleAncestorArray[pidCounter]);
+        }
+        // find the families of the last generation
+        output('<br>Now finding ' + numDescendantGen + ' Generation(s) of Descendants for Generation ' + numAncestorGen + ' . . .');
+        console.log('CALLING _rhProcessDescendants(Generation ' + numAncestorGen + ' [' + childPidArray + ']).');
+        _rhProcessDescendants();
+    });
+}
+// Debbie's Record Hints Tool - get the ancestors with Dallan's program
+function _rhGetAllAncestors(personIds, generations) { // find the ancestors
+    var fatherId, motherId, fatherGotPerson, motherGotPerson;
+    dupFlag = "NO";                     // NO=Not a duplicate; YES= it is a duplicate
+    displayGen = numAncestorGen - generations;
+    console.log('STARTING _rhGetAllAncestors for Generation ' + displayGen + ' [' + personIds + ']');
+    //
+    // base case
+    if (generations === 0) {
+        // when jQuery.when is called with a single parameter, it returns a promise
+        // that is resolved immediately
+        return jQuery.when([personIds]);
+    }
+    maleAncestorArray = [];
+    // create an array of promises - one for each male
+    // each promise returns an array of that person's parentIds (fathers + mothers)
+    var promises = [];
+    for (var i = 0; i < personIds.length; i++) {
+        console.log('  Pushing promise for ' + i + ':' + personIds[i]);
+        promises.push(FamilySearch.getParents(personIds[i]).then(function (response) {
+            //    get the Parents
+            //    THEN
+            //    save the Parents
+            var parentIds = [];
+            var relationships = response.getChildAndParentsRelationships();
+            for (var j = 0; j < relationships.length; j++) {
+                var relationship = relationships[j];
+                fatherId = relationship.$getFatherId();
+                if (!!fatherId) {
+                    console.log('  Found Father=' + fatherId + ' of ' + relationship.$getChildId());
+                    // check for duplicates in parentIds
+                    dupFlag = "NO";
+                    for (var h = 0; h < parentIds.length; h++) {
+                        //console.log(' Checking ' + fatherId+ ' against ' + parentIds[h]);
+                        if (fatherId == parentIds[h]) {
+                            dupFlag = "YES";
+                            console.log('Father ' + fatherId + ' is a Duplicate');
+                            //} else {console.log('Father ' + fatherId + ' is a NOT Duplicate');}
+                        }
+                    }
+                    if (dupFlag == "NO") {// he is unique
+                        console.log('    Pushing unique fatherId to parentsIds[' +  fatherId + '] of ' + relationship.$getChildId());
+                        parentIds.push(fatherId);
+                        nameArray[fatherId] = ' ';
+                        lifeSpanArray[fatherId] = ' ';
+                        maleAncestorArray.push(fatherId);
+                        console.log('    Pushing to maleArray fatherId:' + fatherId + ' of ' + relationship.$getChildId());
+                        fatherGotPerson = response.getPerson(fatherId);
+                        if (!!fatherGotPerson) {
+                            if (fatherGotPerson.$getDisplayName() === undefined){
+                                nameArray[fatherId] = 'UNKNOWN';
+                            } else {
+                                nameArray[fatherId] = fatherGotPerson.$getDisplayName();
+                            }
+                            if (fatherGotPerson.$getDisplayLifeSpan() === undefined){
+                                lifeSpanArray[fatherId] = '    -    ';
+                            } else {
+                                lifeSpanArray[fatherId] = fatherGotPerson.$getDisplayLifeSpan();
+                            }
+                            console.log('    Stored to nameArray[' + fatherId + '] is ' + nameArray[fatherId]
+                                + ' lifeSpanArray(' + lifeSpanArray[fatherId] + ').');
+                        }
+                    }
+                    motherId = relationship.$getMotherId();
+                    if (!!motherId) {
+                        console.log('  Found Mother=' + motherId + ' of ' + relationship.$getChildId());
+                        // check for duplicates in parentIds
+                        dupFlag = "NO";
+                        for (var g = 0; g < parentIds.length; g++) {
+                            if (motherId == parentIds[g]) {
+                                dupFlag = "YES";
+                                //output('<br />Mother ' + motherId + ' is a Duplicate');
+                            }
+                        }
+                        if (dupFlag == "NO") {// she is unique
+                            console.log('    Pushing unique motherId to parentsIds[' +  motherId + '] of ' + relationship.$getChildId());
+                            parentIds.push(motherId);
+                            // initialize
+                            nameArray[motherId] = ' ';
+                            lifeSpanArray[motherId] = ' ';
+                            motherGotPerson = response.getPerson(motherId);
+                            if (!!motherGotPerson){
+                                if (motherGotPerson.$getDisplayName() === undefined){
+                                    nameArray[motherId] = 'UNKNOWN';
+                                } else {
+                                    nameArray[motherId] = motherGotPerson.$getDisplayName();
+                                }
+                                if (motherGotPerson.$getDisplayLifeSpan() === undefined){
+                                    lifeSpanArray[motherId] = '    -    ';
+                                } else {
+                                    lifeSpanArray[motherId] = motherGotPerson.$getDisplayLifeSpan();
+                                }
+                                console.log('    Stored to nameArray[' + motherId + '] is ' + nameArray[motherId]
+                                    + ' lifeSpanArray(' + lifeSpanArray[motherId] + ').');
+                            }
+                        }
+                    }
+                }
+                return parentIds;
+            }
+        }))
+    }
+    // Promises completed for a generation
+    return jQuery.when.apply(null, promises).then(function () {
+        // the "arguments" passed to this function holds an array of responses
+        // each response is the array of parentIds from above
+        displayGen = numAncestorGen - generations;
+        console.log(' ');
+        console.log('PROMISES COMPLETE FOR GENERATION ' + displayGen + '. Found ' + arguments.length + ' parent couples.');
+        var allParentIds = [];
+        for (var i = 0; i < arguments.length; i++) {
+            console.log('      Couple i=' + i + ' arguments[i]=' + arguments[i]);
+            for (var j = 0; j < arguments[i].length; j++) {
+                if (allParentIds.indexOf(arguments[i][j]) === -1) { // skip the duplicates
+                    allParentIds.push(arguments[i][j]);
+                }
+            }
+        }
+        // return a promise for the passed-in personIds concat'd with allAncestorIds
+        return _rhGetAllAncestors(allParentIds, generations - 1).then(function (allAncestorIds) {
+            return [personIds].concat(allAncestorIds);
+        });
+    });
+}
+// Debbie's Record Hints Tool - get the children with Harold's program
+function _rhProcessDescendants() {
+    //
+    // the oldest gen of males is handed to this process as the children in childPidArray
+    // they are loaded into principalArray to find their spouses and children
+    // save everyone in PidArray
+    generationChildCount = 0;                    // counter for the total number of children
+    descendantGenNumber ++;                 // counter for the current generation number
+    displayGen = numAncestorGen - descendantGenNumber;
+    console.log('STARTING _rhProcessDescendants(Generation ' + displayGen + ' [' + childPidArray + ']).');
+                     //+ ' accessToken=' + accessToken);
+    console.log('  Counted ' + childPidArray.length + ' male ancestors in generation ' + displayGen);
+        //' accessToken=' + accessToken);
+    if (descendantGenNumber < numDescendantGen){ // count thru the generations
+        //move the children into pidArray for processing
+        for (var i = 0; i < childPidArray.length; i ++) {
+            pidArray[i] = childPidArray[i];
+        }
+        console.log('CALLING _processCouples(' + pidArray + ')');
+        pidCounter = -1;
+       _rhProcessCouples();
+    }
+    // get the families
+    // THEN
+    // process the record hints
+    else {
+        printIt = '<table id="rhOutput"><tr><td id="rhOutputTitle" colspan=2><b>Record Hints for the prime ancestors of ' + selectedId +'</b></td></tr>' // Output Table Title
+        + '<tr><td>Person</td><td>Record Hint</td></tr>';
+        output('<br>Looking for Record Hints for ' + pidArray.length + ' Relatives born between 1840 and 1905 . . .');
+        console.log('CALLING_rhProcessRecordHints for ' + pidArray.length + '. Please wait . . . ');
+        pidCounter = -1;
+        _rhProcessRecordHints();
+    }
+}
+// Debbie's Record Hints Tool - process the next "principal PID" or list of ancestors
+function _rhProcessCouples() {
+    pidCounter++;                    // principal pid counter
+    //console.log('  STARTING _processCouples(' + pidCounter + ':'+ pidArray[pidCounter] + ')');
+    //' accessToken=' + accessToken);
+    if (pidCounter < pidArray.length) {
+        _rhGetCouples(pidArray[pidCounter]);
+    }
+    // get the couples
+    // THEN
+    // process the children
+    else {
+        coupleCounter = -1;
+        output('<br />Finding the children of Generation ' + displayGen + ' . . .');
+        console.log('CALLING _processChildren(' + coupleIdArray + ')');
+        _rhProcessChildren();
+    }
+}
+//  Debbie's Record Hints Tool - get the spouses of a person and their hints
+function _rhGetCouples(pid) {
+    //console.log('  STARTING _rhGetCouples(' + pid + ') accessToken=' + accessToken);
+    var theUrl = 'https://familysearch.org/tree-data/descendancy/'
+            + pid + '/spouses?fsSessionId=' + accessToken;
+    //console.log('theUrl=' + theUrl);
+    var spouseArray = [];
+    var numSpouses = 0;
+    var personPid, spousePid, coupleNum, theBirth;
+    dupFlag = "NO";                 // NO=Not a duplicate; YES= it is a duplicate
+    //output('<br /> theURL=' + theUrl);
+    // retrieve the spouses data
+    $.getJSON(theUrl, function (result) {
+        //
+        //THEN
+        //
+        //console.log('<br />gotCouples(' + pid + ')=' + result);
+        if (result != null) {
+            $.each(result, function (key, val) {
+                if (key == 'data') {
+                    if (val != null) {
+                        numSpouses = val.length;
+                        //console.log('<br />Found ' + numSpouses + ' spouse(s) of ' + pid + ':');
+                        // for each spouse:
+                        $.each(val, function (spousesKey, spousesVal) {
+                            //output('<br />spousesKey:spousesVal is ' + spousesKey + ':' + spousesVal);
+                            coupleNum = spousesKey + 1;
+                            //console.log('Couple ' + coupleNum + ':');
+                            $.each(spousesVal, function (spouseDataKey, spouseDataVal) {
+                                // get person's data (not the spouse)
+                                if (spouseDataKey == 'person') {
+                                    $.each(spouseDataVal, function (personKey, personVal) {
+                                        if (personKey == 'id') {//this id should be the same as pid do ignore it
+                                            if (personVal != null) {
+                                                // ignore it or compare and sound the alarm
+                                                console.log(' Stored Person Id:' + personVal);
+                                            }
+                                        } else {
+                                            if (personKey == 'name') {
+                                                if (personVal === undefined) {
+                                                    nameArray[pid] = 'UNKNOWN';
+                                                } else {
+                                                    nameArray[pid] = personVal;
+                                                }
+                                                console.log('    Name:' + personVal);
+                                            } else {
+                                                if (personKey == 'gender') {
+                                                    genderArray[pid] = personVal;
+                                                    console.log('    Gender:' + personVal);
+                                                } else {
+                                                    if (personKey == 'lifeSpan') {
+                                                        if (personVal === undefined) {
+                                                            lifeSpanArray[pid] = '    -    ';
+                                                        } else {
+                                                            lifeSpanArray[pid] = personVal;
+                                                        }
+                                                        //
+                                                        //
+                                                        // what if NOT born before 110???????????????
+                                                        //
+                                                        //
+                                                        console.log('    Lifespan:(' + personVal + ')');
+                                                        printIt = 'Family ' + coupleNum + ': ' + pid
+                                                        + ' ' + nameArray[pid] + ':' + genderArray[pid] + ' (' + lifeSpanArray[pid] + ')';
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    });
+                                    console.log('    Found person:' + pid + ' ' + nameArray[pid] + ' '
+                                    + genderArray[pid] + ' (' + lifeSpanArray[pid] + ').');
+                                }
+                                // get the spouse's data
+                                if (spouseDataKey == 'spouse') {
+                                    //console.log('Found spouse:spouseDataVal=' + spouseDataVal);
+                                    if (spouseDataVal != null) {
+                                        $.each(spouseDataVal, function (spouseKey, spouseVal) {
+                                            //output('<br />spouseKey:spouseVal=' + spousesKey + ':' + spouseDataVal);
+                                            if (spouseKey == 'id') {
+                                                if (spouseVal != null) {
+
+                                                    //
+                                                    //
+                                                    //
+                                                    // what if spousePid is UNKNOWN or undefined
+                                                    //
+                                                    //
+                                                    //
+                                                    spousePid = spouseVal;
+                                                    console.log('       Found Spouse Id:' + spousePid);
+                                                    nameArray[spousePid] = ' ';
+                                                    lifeSpanArray[spousePid] = '  ';
+                                                }
+                                            } else {
+                                                if (spouseKey == 'name') {
+                                                    if (spouseVal === undefined){
+                                                        nameArray[spousePid] = 'UNKNOWN';
+                                                    } else {
+                                                        nameArray[spousePid] = spouseVal;
+                                                    }
+                                                    console.log('          Name:' + nameArray[spousePid]);
+                                                } else {
+                                                    if (spouseKey == 'gender') {
+                                                        genderArray[spousePid] = spouseVal;
+                                                        console.log('          Gender:' + genderArray[spousePid]);
+                                                    } else {
+                                                        if (spouseKey == 'lifeSpan') {
+                                                            if (spouseVal === undefined){
+                                                                lifeSpanArray[spousePid] = '    -    ';
+                                                            } else {
+                                                                lifeSpanArray[spousePid] = spouseVal;
+                                                            }
+                                                            console.log('          Lifespan:(' + lifeSpanArray[spousePid] + ')');
+                                                            printIt += '      & ' + spousePid + ' ' +
+                                                            nameArray[spousePid] + ' ' +
+                                                            genderArray[spousePid] + ' (' +
+                                                            lifeSpanArray[spousePid] + ').';
+                                                            //output(' ' + printIt);
+                                                            //theBirth = spouseVal.split('-', 1);
+                                                            theBirth = parseInt(spouseVal);
+                                                            //console.log('Spouse Birth=' + theBirth);
+                                                            if (isNaN(theBirth)) {theBirth = 0;}
+                                                            // check for duplicates in pidArray
+                                                            dupFlag = "NO";
+                                                            for (var h = 0; h < spouseArray.length; h++) {
+                                                                if (spousePid == spouseArray[h]){dupFlag = "YES";}
+                                                            }
+                                                            if (dupFlag == "NO") {// spouse is unique
+                                                                //if (theBirth <= yearLimit) { // born before 110 years ago
+                                                                //if (pidArray.length < numAncestors) {
+                                                                //pidArray.push(spousePid);
+                                                                //console.log('Spouse ' +  spousePid + ' has birth ' + theBirth + ' before ' + yearLimit);
+                                                                //} else {
+                                                                //doneFlag = 'YES';
+                                                                //console.log('Found ' + numAncestors + ' ancestors. Done finding Ancestors.');
+                                                                //}
+                                                                //} else {
+                                                                //    console.log('Spouse ' +  spousePid + ' has birth ' + theBirth + ' after ' + yearLimit);
+                                                                //}
+                                                                spouseArray.push(spousePid);
+                                                                coupleId = pid + '_' + spousePid;
+                                                                coupleIdArray.push(coupleId);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        })
+                                    } else {
+                                        //output('<br /><font color="Red">MINOR PROBLEM No spouse for ' + pid + ' ' + nameArray[pid] + '.</font>');
+                                    }
+                                    console.log('          Found spouse:' + spousePid+ ' ' + nameArray[spousePid] + ' '
+                                    + genderArray[spousePid] + ' (' + lifeSpanArray[spousePid] + ').');
+                                }
+                                // get the person suggestions
+                                //if (spouseDataKey == 'personCoupleSuggestions' && spouseDataVal != null) {
+
+                                // get the couple suggestions
+                                //if (spouseDataKey == 'spouseCoupleSuggestions' && spouseDataVal != null) {
+                            })
+                        })
+                    }
+                }
+            })
+        }
+        // get the next couple
+        _rhProcessCouples();
+    })
+}
+// Debbie's Record Hints Tool - process the couple's children
+function _rhProcessChildren() {
+    coupleCounter++;
+    //console.log(' STARTING _processChildren(Couple ' + pidCounter + ':' + couplePidArray[pidCounter] + ')');
+    if (coupleCounter < coupleIdArray.length) {
+       console.log('CALLING _rhProcessChildren(' + coupleIdArray[coupleCounter] + ')');
+       _rhGetChildren(coupleIdArray[coupleCounter]);
+    }
+    //
+    // get the children
+    // THEN
+    // return
+    else {
+        output('<br />Children found for Generation ' + displayGen + ' . . .');
+        _rhProcessDescendants();
+    }
+}//  Debbie's Record Hints Tool - get a spouse's children
+function _rhGetChildren(coupleId) {
+    var childId, childNum, theBirth;
+    var childIdArray = [];
+    dupFlag = "NO";         // NO=Not a duplicate; YES= it is a duplicate
+    var theUrl = 'https://familysearch.org/tree-data/descendancy/' + coupleId + '/children?fsSessionId=' + accessToken;
+    //output('<br /> URL=' + theUrl);
+    console.log('  STARTING _rhGetChildren(' +  coupleId + ')');
+    // retrieve the children data
+    $.getJSON(theUrl, function (result) {
+        if (result != null) {
+            //console.log('Children of ' + coupleId + ':');
+            $.each(result, function (key, val) {
+                if (key == 'data') {
+                    $.each(val, function (dataKey, dataVal) {
+                        // retrieve the children data
+                        if (dataKey == 'children') {
+                            if (dataVal != null) {
+                                var numChildren = dataVal.length;
+                                if (numChildren > 0) {
+                                    console.log('Couple ' + pidCounter + '(' + coupleId + ') have ' + numChildren + ' children');
+                                    // for each child:
+                                    for (var i = 0; i < numChildren; i++) {
+                                        $.each(dataVal, function (childrenKey, childrenVal) {
+                                            if (childrenKey == i) {
+                                                childNum = i + 1;
+                                                // get the child data
+                                                $.each(childrenVal, function (childKey, childVal) {
+                                                    if (childKey == 'id') {
+                                                        childId = childVal;
+                                                        //console.log('    Child ' + childNum + ':' + childId);
+                                                        if (!!childId) { // if the Pid exists
+                                                            //console.log('    Found child ' + childId);
+                                                            // check for duplicates in pidArray
+                                                            dupFlag = "NO";
+                                                            for (var h = 0; h < pidArray.length; h++) {
+                                                                //console.log('    childId=' + childId + ' =? pidArray['+ h + ']=' + pidArray[h]);
+                                                                if (childId == pidArray[h]) {
+                                                                    dupFlag = "YES";
+                                                                    //console.log('    Child ' + childNum + ':'
+                                                                    // + childId + ' ' + nameArray[childId]
+                                                                    // + ' is a duplicate in ' + coupleId + ' family.');
+                                                                }
+                                                            }
+                                                            if (dupFlag == "NO") {// child is unique
+                                                                //if (theBirth <= yearLimit) { // born before 110 years ago
+                                                                //if (pidArray.length < numAncestors) { //if not reached the maximun number of ancestors to process
+                                                                //pidArray.push(childId);
+                                                                nameArray[childId] = ' ';
+                                                                lifeSpanArray[childId] = ' ';
+                                                                //console.log('    Child ' + childNum + ':' + childId);
+                                                                //console.log('        Child birth:' + theBirth + ' before ' + yearLimit);
+                                                                //} else {
+                                                                //    doneFlag = 'YES';
+                                                                //    console.log('Found ' + numAncestors + ' ancestors. Done finding Ancestors.');
+                                                                //}
+                                                                pidArray.push(childId);
+                                                                generationChildCount++;
+                                                            }
+                                                        }
+                                                    } else {
+                                                        if (childKey == 'name') {
+                                                            nameArray[childId] = childVal;
+                                                            console.log('        Name:' + childVal);
+                                                        } else {
+                                                            if (childKey == 'gender') {
+                                                                genderArray[childId] = childVal;
+                                                                console.log('        Gender:' + childVal);
+                                                            } else {
+                                                                if (childKey == 'lifeSpan') {
+                                                                    console.log('        Lifespan:(' + childVal + ')');
+                                                                    if (childVal === undefined) {
+                                                                        lifeSpanArray[childId] = '    -    ';
+                                                                    } else {
+                                                                        lifeSpanArray[childId] = childVal;
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                });
+                                                console.log('  ' + childNum + ' child found:' + childId + ' ' + nameArray[childId] + '(' + lifeSpanArray[childId] + ').');
+                                            }
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            });
+            _rhProcessChildren();
+        }
+    });
+}
+//  Debbie's Record Hints Tool - process everyone's Record Hints and print them out
+function _rhProcessRecordHints() {
+    pidCounter++;
+    console.log('STARTING_rhProcessRecordHints(' + pidCounter + 'pidArray=[' + pidArray + ']');
+    if (pidCounter < pidArray.length) {
+        _rhGetRecordHints(pidArray[pidCounter]);
+    //
+    // get the record hints
+    // THEN
+    // Print the record hints
+    } else {
+        //
+        console.log('Wait 20 seconds for the get record hints to finish . . .');
+        //
+        setTimeout(function () {
+            printIt += '</table>';
+                output(printIt);
+                clearInterval(theTimer);
+                _drawszlider(100,100);
+        }, 20000);
+    }
+}
+// Debbie's Record Hints Tool -  get the record hints
+function _rhGetRecordHints(personId) {
+    var printRow;
+    //console.log('STARTING _rhGetRecordHints(' + pidCounter + ':' + personId + ')');
+    var theUrl = 'https://familysearch.org/tree-data/record-matches/' + personId + '?fsSessionId=' + accessToken;
+    //output(' theUrl=' + theUrl);
+    //
+    //
+    // tried counting the record hints and shutdown after 9 but the number of total rec hints is not available at this moment
+    var personRecHintCount = 0;
+    $.getJSON(theUrl, function (result) {
+        //console.log('***gotJSON(' + personId + ')' + ' PrintRow=' + printRow);
+        //output('<br />gotJSON for ' + personId + ' ' + personId + ' of ' + numAncestors + '.');
+        if (result != null) {
+            //output(' Result is not null');
+            $.each(result, function (key, val) {
+                if (key == 'data') {
+                    //console.log('Found data val=' + val);
+                    //output(' Found the data val=' + val);
+                    $.each(val, function (dataKey, dataVal) {
+                        if (dataKey == 'matches') {
+                            //output('<br />Found matches dataVal=' + dataVal + '.');
+                            if (dataVal == '') {
+                                //console.log('Found no matches dataVal=null');
+                                //output(' Found no matches dataVal is empty');
+                            } else { // found a Record Hint
+                                //console.log('Found matches dataVal=' + dataVal);
+                                //output('<br />Found matches dataVal=' + dataVal);
+                                $.each(dataVal, function (suggKey, suggVal) {
+                                    //console.log('Found suggKey=' + suggKey + ' suggVal=' + suggVal);
+                                    //output(' Found suggKey=' + suggKey + ' suggVal=' + suggVal);
+                                    personRecHintCount++;
+                                    if (personRecHintCount != 1) {// this person has more that one record hint
+                                        console.log('    SKIPPED the additional Record Hint for ' + personId);
+                                    } else {
+                                        totalRecHints++;
+                                        //console.log('totalRecHints=' + totalRecHints);
+                                        console.log('Found Record Hint ' + personRecHintCount + ' for ' + personId
+                                        + '. Total Record Hints is ' + totalRecHints + '.');
+                                        printRow = '<tr>' + '<td id="rhOutput"><a target="_blank" href="https://familysearch.org/tree/#view=ancestor&person='
+                                        + personId + '">' + personId + ' ' + nameArray[personId] + '</a>'
+                                        + '<br />' + '(' + lifeSpanArray[personId] + ')</td>';
+                                        //console.log('Found Record Hint printRow=' + printRow);
+                                        $.each(suggVal, function (suggRKey, suggRVal) {
+                                            //output('<br />&nbsp;&nbsp;found suggRKey=' + suggRKey + ' suggRVal=' + suggRVal);
+                                            if (suggRKey == 'personName') {
+                                                //output(' ' + personId + ' ' + suggRVal);
+                                                nameArray[personId] = suggRVal;
+                                            }
+                                            if (suggRKey == 'recordUrl') {
+                                                //output('<br />2ndCell td a href=' + suggRVal);
+                                                //console.log('<td><a target="_blank" href="' + suggRVal + '">');
+                                                printRow += '<td id="rhOutput"><a target="_blank" href="' + suggRVal + '">';
+                                            }
+                                            //if (suggRKey == 'palRecordUrl') {
+                                            //output(' &nbsp;&nbsp;&nbsp;&nbsp;palRecordUrl=' + suggRVal);
+                                            //}
+                                            if (suggRKey == 'collectionTitle') {
+                                                //output(' - Collection Title: ' + suggRVal);
+                                                //console.log(suggRVal + '</a></td>');
+                                                _hideCollection(suggRVal);
+                                                printRow += newTitle + '</a></td>';
+                                                //output(' ' + personId + ' ' + nameArray[personId] + ' ' + newTitls);
+                                            }
+                                            // if (suggRKey == 'hasImage') {
+                                            //output('<br />3rdCell td is ' + suggRKey + ':' + suggVal);
+                                            //$.each(suggRVal, function (imageKey, imageVal) {
+                                            //output('<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;imageKey=' + imageKey + ':' + imageVal);
+                                            //printRow += '<a target="_blank" href="https://familysearch.org/tree/#view=allMatchingRecords&person='
+                                            //        + personId + '"> Record Hint' + suggRVal + '</a>';
+                                            //})
+                                            //}
+                                        })
+                                    }
+                                });
+                                printRow += '</tr>';
+                                //output(' End of Record printRow=' + printRow);
+                                printIt += printRow;
+                                //console.log('printIt=' + printIt);
+                            }
+                        }
+                    })
+                }
+            })
+        }
+    });
+   _rhProcessRecordHints();
+}
+// Ancestor Memories Tool
+function _memRun() {
+    var iPid = 0;
+    var pid = [];
+    var name = [];
+    var birthDate = [];
+    var deathDate = [];
+    var lifeSpan = [];
+    var relation = [];
+    var traversal = FSTraversal(FamilySearch)
+        .limit(3)
+        .order('ancestry')
+        .concurrency(1)
+        .person(function (person, callback) {
+            if (iPid == 0) {
+                output('<p /> Please be patient. This may take awhile.');
+            }
+            pid[iPid] = person.id;
+            name[iPid] = person.$getDisplayName();
+            birthDate[iPid] = person.$getBirthDate();
+            deathDate[iPid] = person.$getDeathDate();
+            lifeSpan[iPid] = person.$getDisplayLifeSpan();
+            relation[iPid] = traversal.relationshipTo(person.id);
+            if (relation[iPid] == 'yourself') {
+                relation[iPid] = 'self';
+            }
+            console.log(name[iPid] + ' (' + lifeSpan[iPid] + '), ' + pid[iPid] + ', ' + relation[iPid] + ' to ' + selectedId);
+            iPid++;
+        })
+        .done(function () {
+            output('<p /><b> GET MEMORIES </b>');
+            for (var i = 0; i < iPid; i++) {
+                _getMemories(pid[i], name[i], lifeSpan[i], accessToken);
+            }
+            console.log('Memories Tool Done!');
+            clearInterval(theTimer);
+            _drawszlider(100,100);
+        });
+    traversal.traverse(selectedId);
+}
+function _getMemories(pid, name, lifeSpan, accessToken) {
+    FamilySearch.getPersonMemoriesQuery(pid).then(function (response) {
+        var memories = response.getMemories();
+        for (var i = 0, len = memories.length; i < len; i++) {
+            var memory = memories[i];
+            output('<p  id="memOutput">' + name + ', ' + pid + ', (' + lifeSpan + ')' +
+                    '<br/> Artifact URL: ' + '<a target="_blank" href=' + memory.about + '>' + memory.about + '</a>' +
+                    '<br/> Media Type: ' +  memory.mediaType +
+                    '<br/> Title: ' +  memory.$getTitle() + '</p>'
+            );
+        }
+    })
+}
+function _indRun() {
+    iChild = 1;
+    genNumber = 0;
+    childPidArray[0] = indForm.indPid.value;
+    indGenerations = indForm.indGenerations.value;
+    if (indGenerations < 1) {
+        indGenerations = 1;
+        output('<p />' + indGenerations + ' generations');
+    }
+    else if (indGenerations > 4) {
+        indGenerations = 4;
+        output('<p />' + indGenerations + ' generations');
+    }
+    var pid = childPidArray[0];
+    kidCnt[pid] = -99;
+    for (var i=0; i<5; i++){
+        totals[i] = 0;
+    }
+    output(' Please be patient. Depending upon the size of your family and the number of generations you ' +
+    'requested, this could take up to 30 minutes or more.<br />*** GENERATION 0 ***');
+    console.log('*** GENERATION 0 ***');
+    _indProcessGeneration();
+}
+// process the next generation
+function _indProcessGeneration() {
+    genNumber ++;
+    if (genNumber <= indGenerations){
+        numPrincipalPid = iChild;
+        //move the children into pricipalArray for processing
+        // when their spouses are found they are stored in spousePidArray
+        for (i = 0; i < numPrincipalPid; i ++) {
+            principalPidArray[i] = childPidArray[i];
+        }
+        iPrincipalPid = -1;
+        iSpouse = 0;
+        iChild = 0;
+        _indProcessCouples();
+    }
+    else {
+        numUniquePid = iPid;
+        iPid = -1;
+        _indProcessOrdinances();
+    }
+}
+// process the next "principal PID"
+function _indProcessCouples() {
+    iPrincipalPid ++;
+    if (iPrincipalPid < numPrincipalPid) {
+        console.log('CALLING _indGetCouples[' + principalPidArray[iPrincipalPid] + ']');
+        _indGetCouples(principalPidArray[iPrincipalPid]);
+    }
+    else {
+        numCouples = iSpouse;
+        iSpouse = -1;
+        console.log(' ');
+        console.log('*** GENERATION -' + genNumber + ' ***');
+        output('<br />*** GENERATION -' + genNumber + ' ***');
+        _indProcessChildren();
+    }
+}
+// process a spouse's children
+function _indProcessChildren() {
+    iSpouse ++;
+    if (iSpouse < numCouples) {
+        _indGetChildren(couplePidArray[iSpouse], spousePidArray[iSpouse]);
+    }
+    else {
+        _indProcessGeneration()
+    }
+}
+// process ordinances
+function _indProcessOrdinances() {
+    iPid ++;
+    if (iPid < numUniquePid) {
+        var pid = pidArray[iPid];
+        ordCnt     [iPid] = 0;
+        recHintCnt [iPid] = 0;
+        suggCnt    [iPid] = 0;
+        dataCorrCnt[iPid] = 0;
+        console.log('________________________________________');
+        console.log('Descendant: ' +  pid + ' ' + indicatorNameArray[pid] + ' ' + indicatorGenderArray[pid] + ' (' + indicatorLifeArray[pid] + ')');
+        output('<br />Processing descendant: ' +  pid + ' ' + indicatorNameArray[pid] + ' ' + indicatorGenderArray[pid] + ' (' + indicatorLifeArray[pid] + ')');
+        _indGetOrdinances();
+    }
+    else {
+        var printIt = '<p /><table id="indOutput"><tr><td colspan="8">DESCENDANTS OF ' + indForm.indPid.value
+                + ' for ' + indGenerations + ' Generations</td></tr>';
+        printIt += '<tr><td width="12" id="indOutput"><font color="limegreen">' + 'REQUEST ORDINANCES' + '</font></td>' +
+            '<td width="12" id="indOutput"><font color="red">' + 'RECORD HINTS' + '</font></td>' +
+            '<td width="12" id="indOutput"><font color="blue">' + 'RESEARCH SUGGESTIONS' + '</font></td>' +
+            '<td width="12" id="indOutput"><font color="brown">' + 'DATA PROBLEMS' + '</font></td>' +
+            '<td width="12" id="indOutput">' + 'Children?' + '</td>' +
+            '<td id="indOutput">' + 'PID' + '</td>' +
+            '<td id="indOutput">' + 'Life Span' + '</td>' +
+            '<td id="indOutput">' + 'Name' + '</td></tr>';
+        for (var i=0; i<numUniquePid; i++) {
+            thePid = pidArray[i];
+            console.log('thePid=' + thePid + ' Counts are ' + ordCnt[i] + ' ' + recHintCnt[i] + ' ' + suggCnt[i] + ' ' + dataCorrCnt[i] + kidCnt[thePid]);
+            if (ordCnt[i] == 0        ||      ordCnt[i] === undefined){ordCnt[i] = ' ';}
+            if (recHintCnt[i] == 0    ||  recHintCnt[i] === undefined){recHintCnt[i] = ' ';}
+            if (suggCnt[i] == 0       ||    suggCnt[i]  === undefined){suggCnt[i] = ' ';}
+            if (dataCorrCnt[i] == 0   || dataCorrCnt[i] === undefined){dataCorrCnt[i] = ' ';}
+            if (kidCnt[thePid] == -99 ||          kidCnt[thePid] == 0){kidCnt[thePid] = ' ';}
+            if (ordCnt[i] + recHintCnt[i] + suggCnt[i] + dataCorrCnt[i] > 0) {
+                printIt += '<tr><td id="indOutput"><a target="_blank" href="https://familysearch.org/tree/#view=ancestor&person=' + pidArray[i] + '&section=ordinances"><font color="limegreen">' + ordCnt[i] + '</font></a></td>' +
+                    '<td id="indOutput"><a target="_blank" href="https://familysearch.org/tree/#view=allMatchingRecords&person=' + pidArray[i] + '"><font color="red">' + recHintCnt[i] + '</font></a></td>' +
+                    '<td id="indOutput"><a target="_blank" href="https://familysearch.org/tree/#view=ancestor&person=' + pidArray[i] + '"><font color="blue">' + suggCnt[i] + '</font></a></td>' +
+                    '<td id="indOutput"><a target="_blank" href="https://familysearch.org/tree/#view=ancestor&person=' + pidArray[i] + '&section=descendancy"><font color="brown">' + dataCorrCnt[i] +'</font></a></td>' +
+                    '<td id="indOutput">' + kidCnt[thePid] +'</td>' +
+                    '<td id="indOutput">' + pidArray[i] +'</td>' +
+                    '<td id="indOutput">' + indicatorLifeArray[thePid] + '</td>' +
+                    '<td id="indOutput"><a target="_blank" href="https://familysearch.org/tree/#view=ancestor&person=' + pidArray[i] + '">' + indicatorNameArray[thePid] + '</a></td></tr>';
+            }
+        }
+        printIt += '<tr><td id="indOutput">' + totals[0]  + '</td>' + // Request Ordinances
+                '<td id="indOutput">' + totals[1]  + '</td>' +     // Record Hints
+                '<td id="indOutput">' + totals[2]  + '</td>' +     // Research Suggestions
+                '<td id="indOutput">' + totals[3]  + '</td>' +     // Data Problems
+                '<td COLSPAN="4" id="indOutput">' + 'TOTALS' + '</td></tr></table>';
+        output(printIt);
+        clearInterval(theTimer);
+        _drawszlider(100,100);
+    }
+}
+// get the "principal PID's" spouses
+function _indGetCouples(pid) {
+    var theUrl = 'https://familysearch.org/tree-data/descendancy/' + pid + '/spouses?fsSessionId=' + accessToken;
+    var numSpouses = 0;
+    var spousePid;
+    console.log('STARTING _indGetCouples[' + pid + ']');
+    output('<br />&nbsp;&nbsp;&nbsp;&nbsp;Finding Spouses of ' + pid + '');
+    // retrieve the spouses data
+    $.getJSON(theUrl, function (result) {
+        if (result != null) {
+            $.each(result, function (key, val) {
+                if (key == 'data') {
+                    if (val != null) {
+                        numSpouses = val.length;
+                        console.log(numSpouses + ' spouse(s) of ' + pid);
+                        // for each spouse:
+                        $.each(val, function (spousesKey, spousesVal) {
+                            spousesKey ++;
+                            console.log('  Couple ' + spousesKey);
+                            // get the data
+                            $.each(spousesVal, function (spouseDataKey, spouseDataVal) {
+                                // get person's data (not the spouse)
+                                if (spouseDataKey == 'person') {
+                                    $.each(spouseDataVal, function (personKey, personVal) {
+                                        if (personKey == 'id' ||
+                                            personKey == 'name' ||
+                                            personKey == 'gender' ||
+                                            personKey == 'lifeSpan') {
+                                                console.log('     ' + personKey + ': ' + personVal);
+                                        }
+                                    })
+                                }
+                                // get the spouse's data
+                                if (spouseDataKey == 'spouse') {
+                                    if (spouseDataVal != null) {
+                                        $.each(spouseDataVal, function (spouseKey, spouseVal) {
+                                            if (spouseKey == 'id') {
+                                                spousePid = spouseVal;
+                                                pidArray[iPid] = spousePid;
+                                                kidCnt[spousePid] = '-99';
+                                                iPid ++;
+                                                couplePidArray[iSpouse] = pid;
+                                                spousePidArray[iSpouse] = spousePid;
+                                                iSpouse ++;
+                                                console.log('    ' + spouseKey + ': ' + spouseVal);
+                                            }
+                                            if (spouseKey == 'name') {
+                                                indicatorNameArray[spousePid] = spouseVal;
+                                                console.log('    ' + spouseKey + ': ' + spouseVal);
+                                            }
+                                            if (spouseKey == 'gender') {
+                                                indicatorGenderArray[spousePid] = spouseVal;
+                                                console.log('    ' + spouseKey + ': ' + spouseVal);
+                                            }
+                                            if (spouseKey == 'lifeSpan') {
+                                                indicatorLifeArray[spousePid] = spouseVal;
+                                                console.log('    ' + spouseKey + ': ' + spouseVal);
+                                            }
+                                        })
+                                    }
+                                }
+                                // get the person suggestions
+                                if (spouseDataKey == 'personCoupleSuggestions' && spouseDataVal != null) {
+                                    $.each(spouseDataVal, function (personSuggKey, personSuggVal) {
+                                        if (personSuggVal != null && personSuggVal != 'NO_SOURCES_ATTACHED') {
+                                            if (personSuggKey == 'dataQualityList') {
+                                                personQualSugg[pid] = personSuggVal;
+                                            }
+                                            else if (personSuggKey == 'researchSuggestionList') {
+                                                personResearchSugg[pid] = personSuggVal;
+                                            }
+                                            else {
+                                                personOtherSugg[pid] = personSuggVal;
+                                            }
+                                        }
+                                    })
+                                }
+                                // get the couple suggestions
+                                if (spouseDataKey == 'spouseCoupleSuggestions' && spouseDataVal != null) {
+                                    $.each(spouseDataVal, function (coupleSuggKey, coupleSuggVal) {
+                                        if (coupleSuggVal != null && coupleSuggVal != 'NO_SOURCES_ATTACHED') {
+                                            if (coupleSuggKey == 'dataQualityList') {
+                                                coupleQualSugg[spousePid] = coupleSuggVal;
+                                            }
+                                            else if (coupleSuggKey == 'researchSuggestionList') {
+                                                coupleResearchSugg[spousePid] = coupleSuggVal;
+                                            }
+                                            else {
+                                                coupleOtherSugg[spousePid] = coupleSuggVal;
+                                            }
+                                        }
+                                    })
+                                }
+                            })
+                        })
+                    }
+                }
+            })
+        }
+        if (genNumber == 1) {
+            gen0Pid[0] = pid;
+            console.log(' ');
+            console.log('gen0Pid[0] = ' + gen0Pid[0]);
+            for (var i=0; i<numSpouses; i++) {
+                gen0Pid[i+1] = spousePidArray[i];
+                var j = i + 1;
+                console.log('gen0Pid[' + j + '] = ' + gen0Pid[i+1]);
+            }
+        }
+        // get the next couples
+        _indProcessCouples();
+    })
+}
+// get a spouse's children
+function _indGetChildren(pid, spousePid) {
+    var theUrl = 'https://familysearch.org/tree-data/descendancy/' + pid + '_' + spousePid + '/children?fsSessionId=' + accessToken;
+//        var theUrl = 'https://beta.familysearch.org/tree-data/descendancy/' + pid + '_' + spousePid + '/children?fsSessionId=' + accessToken;
+    var childPid;
+    console.log('STARTING _indGetChildren[' + pid + ' _ ' + spousePid + ']');
+    output('<br />&nbsp;&nbsp;&nbsp;&nbsp;Finding Children of [' + pid + ' _ ' + spousePid + ']');
+    if (kidCnt[pid] < 1) {
+        kidCnt[pid] = 0;
+    }
+    if (kidCnt[spousePid] < 1) {
+        kidCnt[spousePid] = 0;
+    }
+    // retrieve the children data
+    $.getJSON(theUrl, function(result) {
+        if (result != null) {
+            console.log('Children of ' + pid + ' and ' + spousePid + ':');
+            $.each(result, function(key, val) {
+                if (key == 'data') {
+                    $.each(val, function(dataKey, dataVal) {
+                        // get the parent suggestions
+                        // retrieve the children data
+                        if (dataKey == 'children') {
+                            if (dataVal != null) {
+                                var numChildren = dataVal.length;
+                                if (numChildren >= 0) {
+                                    kidCnt[pid] = numChildren;
+                                    kidCnt[spousePid] = numChildren;
+                                }
+                                // for each child in dataVal
+                                for (var i = 0; i < numChildren; i++) {
+                                    $.each(dataVal, function(childrenKey, childrenVal) {
+                                        if (childrenKey == i) {
+                                            var childArray = childrenVal;
+                                            var j = i + 1;
+                                            console.log('  Child ' + j);
+                                            // get the data
+                                            $.each(childArray, function(childKey, childVal) {
+                                                if (childKey == 'id') {
+                                                    childPid = childVal;
+                                                    pidArray[iPid] = childPid;
+                                                    kidCnt[childPid] = '-99';
+                                                    iPid ++;
+                                                    iChild ++;
+                                                    childPidArray[iChild - 1] = childVal;
+                                                    //console.log('Child (accumulated) ' + iChild);
+                                                    console.log('    ' + childKey + ': ' + childVal);
+                                                    //output(' ' + childKey + ': ' + childVal);
+                                                }
+                                                if (childKey == 'name') {
+                                                    indicatorNameArray[childPid] = childVal;
+                                                    console.log('    ' +childKey + ': ' + childVal);
+                                                }
+                                                if (childKey == 'gender') {
+                                                    indicatorGenderArray[childPid] = childVal;
+                                                    console.log('    ' + childKey + ': ' + childVal);
+                                                }
+                                                if (childKey == 'lifeSpan') {
+                                                    indicatorLifeArray[childPid] = childVal;
+                                                    console.log('    ' + childKey + ': ' + childVal);
+                                                }
+                                                // get the child suggestions
+                                                if (childKey == 'suggestions' && childVal != null) {
+                                                    $.each(childVal, function(childSuggKey, childSuggVal) {
+                                                        if (childSuggVal != null && childSuggVal != 'NO_SOURCES_ATTACHED') {
+                                                            if (childSuggKey == 'dataQualityList') {
+                                                                childQualSugg[childPid] = childSuggVal;
+                                                            }
+                                                            else if (childSuggKey == 'researchSuggestionList') {
+                                                                childResearchSugg[childPid] = childSuggVal;
+                                                            }
+                                                            else {
+                                                                childOtherSugg[childPid] = childSuggVal;
+                                                            }
+                                                        }
+                                                    })
+                                                }
+                                            })
+                                        }
+                                    })
+                                }
+                            }
+                        }
+                    })
+                }
+            })
+        }
+        _indProcessChildren();
+    })
+}
+// get the ordinances not done
+function _indGetOrdinances() {
+    var theUrl = 'https://familysearch.org/tree-data/reservations/person/' + pidArray[iPid] + '/ordinances?fsSessionId=' + accessToken;
+    //console.log('_indGetOrdinances theUrl=' + theUrl);
+    //var theUrl = 'https://beta.familysearch.org/tree-data/reservations/person/' + pidArray[iPid] + '/ordinances?fsSessionId=' + accessToken;
+    $.getJSON(theUrl, function(result) {
+        if (result != null) {
+            console.log('*** ORDINANCES TO DO for ' + pidArray[iPid] + ' ***');
+            $.each(result, function(key, val) {
+                if (key == 'data') {
+                    $.each(val, function(dataKey, dataVal) {
+                        if (dataKey == 'baptism' || dataKey == 'confirmation' ||  dataKey == 'initiatory' || dataKey == 'endowment' ||
+                                dataKey == 'sealingsToParents' || dataKey == 'sealingsToSpouses') {
+                            $.each(dataVal, function(ordKey, ordVal) {
+                                if (ordKey == 'ownerName' && ordVal != null) {
+                                    console.log(ordKey + ': ' + ordVal);
+                                }
+                                else if (ordKey == 'reservedDate' && ordVal != null) {
+                                    console.log(ordKey + ': ' + ordVal);
+                                }
+                                else if (ordKey == 'assignedToTemple' && ordVal != false) {
+                                    console.log(ordKey + ': ' + ordVal);
+                                }
+                                else if (ordVal == 'Needs More Information' ||
+                                        ordVal == "This person's record contains enough information for ordinances to be performed." ||
+                                        ordVal == 'This ordinance might be done. Please contact FamilySearch Support if you have questions or information.') {
+                                    ordCnt[iPid] ++;
+                                    ordKey = 'status';
+                                    console.log(dataKey + ':');
+                                    console.log(ordKey + ': ' + ordVal);
+                                }
+                                else if (ordKey == '0') {
+                                    $.each(ordVal, function(sealKey, sealVal) {
+                                        if (sealKey == 'ownerName' && sealVal != null) {
+                                            console.log(sealKey + ': ' + sealVal);
+                                        }
+                                        else if (sealKey == 'reservedDate' && sealVal != null) {
+                                            console.log(sealKey + ': ' + sealVal);
+                                        }
+                                        else if (sealKey == 'assignedToTemple' && sealVal != false) {
+                                            console.log(sealKey + ': ' + sealVal);
+                                        }
+                                        else if (sealVal == 'Needs More Information' ||
+                                                sealVal == "This person's record contains enough information for ordinances to be performed." ||
+                                                sealVal == 'This person must be linked to the parents before the sealing can be performed.' ||
+                                                sealVal == 'This ordinance might be done. Please contact FamilySearch Support if you have questions or information.' ||
+                                                sealVal == 'Sealing to Parents not available.') {
+                                            ordCnt[iPid] ++;
+                                            sealKey = 'status';
+                                            console.log(dataKey + ':');
+                                            console.log(sealKey + ': ' + sealVal);
+                                        }
+                                    })
+                                }
+                            })
+                        }
+                    });
+                    totals[0] = totals[0] + ordCnt[iPid];
+                }
+            })
+        }
+        _indRecordHints();
+    })
+}
+// get the record hint suggestions
+function _indRecordHints() {
+    var theUrl = 'https://familysearch.org/tree-data/record-matches/' + pidArray[iPid] + '?fsSessionId=' + accessToken;
+//        var theUrl = 'https://beta.familysearch.org/tree-data/record-matches/' + thePid + '?fsSessionId=' + accessToken;
+    $.getJSON(theUrl, function(result) {
+        if (result != null) {
+            console.log('*** RECORD HINTS for ' + pidArray[iPid] + ' ***');
+            $.each(result, function(key, val) {
+                if (key == 'data') {
+                    $.each(val, function(dataKey, dataVal) {
+                        if (dataKey == 'matches') {
+                            $.each(dataVal, function(suggKey, suggVal) {
+                                recHintCnt[iPid] ++;
+                                var iRec = suggKey + 1;
+                                console.log('Record Hint ' + iRec);
+                                $.each(suggVal, function(suggIKey, suggIVal) {
+                                    if (suggIKey != 'events' && suggIKey != 'relations') {
+                                        console.log('    ' + suggIKey + ': ' + suggIVal);
+                                    }
+                                })
+                            });
+                            totals[1] = totals[1] + recHintCnt[iPid];
+                        }
+                    })
+                }
+            })
+        }
+        _indOtherSuggestions();
+        _indProcessOrdinances();
+    })
+}
+// print the other suggestions
+function _indOtherSuggestions() {
+    console.log('*** RESEARCH SUGGESTIONS ' + pidArray[iPid] + ' ***');
+    var pid = pidArray[iPid];
+    if (personResearchSugg[pid] != null || coupleResearchSugg[pid] != null ||
+            parentResearchSugg[pid] != null || childResearchSugg[pid] != null) {
+        if (personResearchSugg[pid] != null) {
+            suggCnt[iPid]++;
+            console.log(personResearchSugg[pid] + ' ');
+        }
+        if (coupleResearchSugg[pid] != null) {
+            suggCnt[iPid]++;
+            console.log(coupleResearchSugg[pid] + ' ');
+        }
+        if (parentResearchSugg[pid] != null) {
+            suggCnt[iPid]++;
+            console.log(parentResearchSugg[pid] + ' ');
+        }
+        if (childResearchSugg[pid] != null) {
+            suggCnt[iPid]++;
+            console.log(childResearchSugg[pid] + ' ');
+        }
+    }
+    if (personOtherSugg[pid] != null || coupleOtherSugg[pid] != null ||
+            parentOtherSugg[pid] != null || childOtherSugg[pid] != null) {
+        if (personOtherSugg[pid] != null) {
+            suggCnt[iPid]++;
+            console.log(personOtherSugg[pid] + ' ');
+        }
+        if (coupleOtherSugg[pid] != null) {
+            suggCnt[iPid]++;
+            console.log(coupleOtherSugg[pid] + ' ');
+        }
+        if (parentOtherSugg[pid] != null) {
+            suggCnt[iPid]++;
+            console.log(parentOtherSugg[pid] + ' ');
+        }
+        if (childOtherSugg[pid] != null) {
+            suggCnt[iPid]++;
+            console.log(childOtherSugg[pid] + ' ');
+        }
+    }
+    console.log('*** DATA PROBLEMS ' + pid + ' ***');
+    if (personQualSugg[pid] != null || coupleQualSugg[pid] != null ||
+            parentQualSugg[pid] != null || childQualSugg[pid] != null) {
+        if (personQualSugg[pid] != null) {
+            dataCorrCnt[iPid]++;
+            console.log(personQualSugg[pid] + ' ');
+        }
+        if (coupleQualSugg[pid] != null) {
+            dataCorrCnt[iPid]++;
+            console.log(coupleQualSugg[pid] + ' ');
+        }
+        if (parentQualSugg[pid] != null) {
+            dataCorrCnt[iPid]++;
+            console.log(parentQualSugg[pid] + ' ');
+        }
+        if (childQualSugg[pid] != null) {
+            dataCorrCnt[iPid]++;
+            console.log(childQualSugg[pid] + ' ');
+        }
+    }
+    totals[2] = totals[2] + suggCnt[iPid];
+    totals[3] = totals[3] + dataCorrCnt[iPid];
+}
+// Initialize
+FamilySearch.init({
+    client_id: 'XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX',  // Your Developer Key
+    environment: 'sandbox',
+    auth_callback: 'http://localhost:63342/js',  // Your Callback
+    http_function: $.ajax,
+    deferred_function: $.Deferred
+});
+// display results
+function output(data) {
+    $('#output').append(data);
+}
+</script>
+<table id="windowBody">
+    <tr id="windowHeader"><!-- This is the page hearder -->
+        <td colspan="2">
+            <img id="windowLogo" alt="FamilySearch Logo" src="https://edge.fscdn.org/assets/img/theme-engage/assets/images/tree-logotype-1x-94806fd4d3214ea1ab7ce7eac7310d2c.png">
+            <iframe id="windowClock" src="http://free.timeanddate.com/clock/i4ds13cp/n220/fc039/tccff/ftb/tt0/tw1/tm1/ta1/tb4"></iframe>
+            <br>
+            <p id="windowTitle">Hello, Welcome to FamilySearch's Byte Size Genealogy</p>
+            <p id="srBox">Created by the Lean Learning Team of FamilySearch</p>
+        </td>
+    </tr>
+    <tr><!-- This is the progress bar -->
+        <td id="progressBar" colspan="2">
+            <div id="szlider">
+                <div id="szliderbar"></div>
+                <div id="szazalek"></div>
+            </div>
+        </td>
+    </tr>
+    <tr id="windowMiddle"><!-- This is the body of the page -->
+        <td id="toolBox" class="toolBox">
+            <!-- This is the Prime request form presented to the user -->
+            <form id="priForm" class="toolBox">
+                <!-- This is the title of the Prime Descendants Tool-->
+                <p id="priBoxTitle" class="toolBoxTitle">Prime Descendants Tool</p>
+                <p>This tool will look for your ancestors and cousins then find them in the 1880, 1900, and 1910 US Census.</p>
+                <!-- This is the input box of the Prime Descendants request form-->
+                <p>Family Search Id (leave blank to use your own ID):
+                    <input id="priPid" type="text" value="KN4S-VX5" size="8">
+                    <!-- This is the Prime Descendants submit button -->
+                <p>Number of Ancestor Generations:
+                    <input name="priNumAncestorGen" type="text" value="3" size="1"></p>
+                <!-- This is the Prime Descendants submit button -->
+                <p>Number of Descendant Generations<br>down from the last ancestor generation:
+                    <input name="priNumDescendantGen" type="text" value="3" size="1"></p>
+                <!-- This is the Prime Descendants submit button -->
+                <p><a href="#" onclick="_run('pri')"><div id="priButton" class="submitButton">Click Here</div></a></p>
+            </form>
+            <!-- This is the Indicator request form tdresented to the user -->
+            <form id="indForm" class="toolBox">
+                <!-- This is the title of the Indicator Tool-->
+                <p id="indBoxTitle" class="toolBoxTitle">Indicators Tool for Descendant Suggestions</p>
+                <p>This tool shows opportunities of Request Ordinances, Record Hints, Research Suggestions and Data Problems for descendants.</p>
+                <!-- This is the input box of the Indicator request form-->
+                <p>Family Search Id (Recommended that you use a Great-Grandfather's Id):
+                    <input id="indPid" value="KWJD-MJR" type="text" size="8"></p>
+                <p>Number of Descendant Generations to Search:
+                    <input name="indGenerations" type="number" value=1 size="1"></p>
+                <!-- This is the Indicators submit button -->
+                <p><a href="#" onclick="_run('ind')"><div id="indButton" class="submitButton">Click Here</div></a></p>
+            </form>
+            <!-- This is the End of Line request form presented to the user -->
+            <form id="eolForm" class="toolBox">
+                <!-- This is the title of the End of Line Tool-->
+                <p id="eolBoxTitle" class="toolBoxTitle">Record Hints for Ancestors<br>at the End of Line Tool</p>
+                <p> This tool will produce a list of record hints for ancestors who are missing parents. The record hints will often have information about the missing parents</p>
+                <!-- This is the input box of the end of LIne request form-->
+                <p>Family Search Id (leave blank to use your own ID): <input id="eolPid" type="text" value="" size="8">
+                    <!-- This is the End of Line submit button -->
+                    <br><a href="#" onclick="_run('eol')"><div id="eolButton" class="submitButton">Click Here</div></a></p>
+            </form>
+            <!-- This is the Record Hints request form presented to the user -->
+            <form id="rhForm" class="toolBox">
+                <!-- This is the title of the Record Hints Tool-->
+                <p id="rhBoxTitle" class="toolBoxTitle">Record Hints Tool</p>
+                <p>With this tool you can search the ancestors and their descendants (or cousins) for record hints. These hints are often valuable records that need to be attached to a relative.</p>
+                <!-- This is the input box of the Record Hints request form-->
+                <p>Family Search Id (leave blank to use your own ID):
+                    <input id="rhPid" type="text" value="KFYM-B83"  size="8">
+                </p>
+                <p>Number of Ancestor Generations:
+                    <input name="rhNumAncestorGen" type="text" value="2" size="1"></p>
+                <p>Number of Descendant Generations<br>down from the last ancestor generation:
+                    <input name="rhNumDescendantGen" type="text" value="1" size="1"></p>
+                <!--p>Number of Ancestors to search for: <input name="rhNumAncestors" size="2" value=25></p>
+                <!-- This is the record Hints submit button -->
+                <p><a href="#" onclick="_run('rh')"><div id="rhButton" class="submitButton">Click Here</div></a></p>
+            </form>
+            <!-- This is the Duplicates request form presented to the user -->
+            <form id="dupForm" class="toolBox">
+                <!-- This is the title of the Duplicates Tool-->
+                <p id="dupBoxTitle" class="toolBoxTitle">Duplicate Ancestors Tool</p>
+                <p>With this tool you will find ancestors who have duplicates that need to be resolved.</p>
+                <!-- This is the input box of the Duplicate request form-->
+                <p>Family Search Id (leave blank to use your own ID):
+                    <input id="dupPid" value="KWJD-MJR" type="text" size="8"></p>
+                <!-- This is the Duplicates submit button -->
+                <p><a href="#" onclick="_run('dup')"><div id="dupButton" class="submitButton">Click Here</div></a></p>
+            </form>
+            <!-- This is the Pick an Ancestor request form presented to the user -->
+            <form id="pikForm" class="toolBox">
+                <!-- This is the title of the Pick an Ancestor Tool-->
+                <p id="pikBoxTitle" class="toolBoxTitle">Pick an Ancestor Tool</p>
+                <p>With this tool you will find ancestors.</p>
+                <!-- This is the input box of the Memories request form-->
+                <p>Family Search Id (leave blank to use your own ID):
+                    <input id="pikPid"  value="KWJD-MJR" type="text" size="8"></p>
+                <!-- This is the Memories submit button -->
+                <p><a href="#" onclick="_run('pik')"><div id="pikButton" class="submitButton">Click Here</div></a></p>
+            </form>
+            <!-- This is the Memories request form presented to the user -->
+            <form id="memForm"  class="toolBox">
+                <!-- This is the title of the Memories Tool-->
+                <p id="memBoxTitle" class="toolBoxTitle">Ancestor Memories Tool</p>
+                <p>With this tool you will find ancestors who have memories in Family Tree. Memories include photos, stories, documents, audio, people and albums.</p>
+                <!-- This is the input box of the Memories request form-->
+                <p>Family Search Id (leave blank to use your own ID):
+                    <input id="memPid"  value="KWJD-MJR" type="text" size="8"></p>
+                <!-- This is the Memories submit button -->
+                <p><a href="#" onclick="_run('mem')"><div id="memButton" class="submitButton">Click Here</div></a></p>
+            </form>
+        </td>
+        <td class="outputBox"><!-- This is the output box-->
+        </td>
+    </tr>
+    <tr><!-- This is page footer-->
+        <td id="windowFooter" colspan="2">
+        </td>
+    </tr>
+</table>
+</body>
+</html>
