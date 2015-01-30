@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lean Learning's Sweet Spot Tool</title>
+    <!-- Created by Debbie Holtzendorff -->
+    <script src='//code.jquery.com/jquery-1.10.1.min.js'></script>
+    <script src='//rootsdev.org/familysearch-javascript-sdk/familysearch-javascript-sdk.js'></script>
+    <link href="sweet.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+<script>
+    // GLOBALS
+    var user, userId, userContactName, userDisplayName, userGender, userLifeSpan; // user of this program information
+    var accessToken;                 // the FamilySearch session ID
+    var theTimer;                    // the timer for the progress bar
+    var ossz = 100;                  // total length of the progress bar
+    var meik = 0;                    // current position or value of the progress bar
+    var selectedId, selectedName, selectedGender, selectedLifeSpan; // user selected Id information
+    var numAncestorGen;              // number of Ancestor Generations to process
+    var genCounter = -1;             // generation counter
+    var displayGen = 0;              // display number of the gen being processed
+    var theUrl;                      // the JSON url
+    var numDescendantGen;            // number of Descendant Generations to process
+    var descendantGenNumber = -1;    // number of the descendant generation being processed
+    var numAncestors = 100;          // number of Relatives to process
+    var todaysDate = new Date();     // the date today
+    var yearLimit = todaysDate.getFullYear() - 110; // set the 110 year rule
+    var dupFlag = 'NO';              // Duplicate Flag to identify if the person is a duplicate
+    var printRow = '';               // one cell of output for the user window
+    var printIt = '';                // output for the user window
+    var idCounter = -1;              // person id counter
+    var nameArray = [];              // array of person names
+    var genderArray = [];            // array of person genders
+    var lifeSpanArray = [];          // array of person lifespans
+    var principalIdArray = [];       // array of person PIDs in a generation
+    var primeIdArray = [];           // array of prime descendants
+    var primeCounter = -1;           // couple counter for primeIdArray
+    var coupleIdArray = [];          // array of a generation of couples
+    var coupleId = '        _        '; // combined husbandId and wifeId
+    var coupleCounter = 0;           // number of the couple being processed
+    var personId, spouseId;          // id of a person and their spouse in a couple
+    var childIdArray = [];           // array of IDs of children in a generation
+    var childCounter = 0;            // counter of children in a generation
+    var noSpouseArray = [];          // array of persons with no spouse
+    var noChildrenArray = [];        // array of Couples with no children
+    var noChildrenArraySplit = [];   // array of persons with no children
+    var sweetCounter = -1;           // counter of persons in the noChildrenArray
+    var newCollectionTitle = '';     // the new record hint collection generalized title
+    var generationChildCount = 0;    // total Children count
+    var totalRecordHints = 0;           // total Record Hint count
+    function _drawszlider(ossz, meik){
+        var szazalek=Math.round((meik*100)/ossz);
+        document.getElementById("szliderbar").style.width=szazalek+'%';
+        document.getElementById("szazalek").innerHTML=szazalek+'%';
+    }
+    // First have the user sign in to FamilySearch
+    function _run() {
+        console.log('STARTING _run().');
+        output('<br />Processing.................');
+        //
+        // User sign in
+        //
+        //output('<br><b>Please sign in to FamilySearch . . .</b>');
+        FamilySearch.getAccessToken().then(function(response) {
+            accessToken = response;
+            //
+            // get the information about the user
+            //
+            FamilySearch.getCurrentUser().then(function (response) {
+                user = response.getUser();
+                userId = user.personId;
+                userContactName = user.contactName;
+                nameArray[userId] = userContactName;
+                output('<p>Hi, ' + userContactName + '. Thank you for trying our tool!</p>');
+                 // + ' Please enter your information above and Click the Submit Button.');
+                console.log('Found userId:' + user.personId + ' contactName:' + userContactName + ' fullName:' + user.fullName + ' email:' + user.email + ' treeUserId:' +  user.treeUserId);
+                FamilySearch.getPerson(userId).then(function (response) {
+                    userDisplayName = response.getPerson(selectedId).$getDisplayName();
+                    userGender = response.getPerson(selectedId).$getDisplayGender();
+                    userLifeSpan =  response.getPerson(selectedId).$getDisplayLifeSpan();
+                    nameArray[userId] = userDisplayName;
+                    genderArray[userId] = userGender;
+                    lifeSpanArray[userId] = userLifeSpan;
+                    console.log('    userDisplayName: ' + userDisplayName + ' ' + userGender + ' (' + userLifeSpan + ').');
+                });
+                _sweetRun();
+            })
+        })
+    }
+    // run the Prime Descendants Tool
+    function _sweetRun(){
+        var displayAncNum = 0;
+        console.log('STARTING _sweetRun().');
+        //
+        // get the information from the user input form
+        //
+        selectedId = sweetForm.sweetPid.value;
+        // if selectedId from the user form is empty then use the current user id
+        //
+        if (selectedId == '') {
+            selectedId = userId;
+            console.log('  SelectedId is empty, Using userId=' + selectedId + '.');
+        }
+        FamilySearch.getPerson(selectedId).then(function (response) {
+            selectedId = response.getPerson(selectedId).id;
+            selectedName = response.getPerson(selectedId).$getDisplayName();
+            selectedGender = response.getPerson(selectedId).$getDisplayGender();
+            selectedLifeSpan = response.getPerson(selectedId).$getDisplayLifeSpan();
+            nameArray[selectedId] = selectedName;
+            genderArray[selectedId] = selectedGender;
+            lifeSpanArray[selectedId] = selectedLifeSpan;
+            console.log('    Processing Id: ' + selectedId + ' is ' + selectedName + ' ' + selectedGender + '(' + selectedLifeSpan + ').');
+            numAncestorGen = sweetForm.sweetNumAncestorGen.value;
+            if (numAncestorGen < 1) {
+                numAncestorGen = 1;
+                output('Number of Ancestor Generations=' + numAncestorGen + ' Changed to 1');
+            }
+            else if (numAncestorGen > 9) {
+                numAncestorGen = 9;
+                output('Number of Ancestor Generations=' + numAncestorGen + ' Changed to 9');
+            }
+            console.log('    Received ' + numAncestorGen + ' Ancestor Generation(s).');
+            numDescendantGen = sweetForm.sweetNumDescendantGen.value;
+            if (numDescendantGen < 1) {
+                numDescendantGen = 1;
+                output('Number of Descendant Generations=' + numDescendantGen + ' Changed to 1');
+            }
+            else if (numDescendantGen > 4) {
+                numDescendantGen = 4;
+                output('Number of Descendant Generations=' + numAncestorGen + ' Changed to 4');
+            }
+            console.log('    Received ' + numDescendantGen + ' Descendant Generation(s).<p>CALLING _sweetGetAllAncestors(' + selectedId + ')');
+            output('<p>Finding the ancestors of ' + selectedId + ' ' + selectedName + '.&nbsp;Please wait . . .</p>');
+            //' accessToken=' + accessToken);
+            theTimer = setInterval(function () {meik ++; if(meik >= 100){meik=0;} _drawszlider(ossz,meik);}, 1000);
+            var selectedPidArray = [selectedId];       // initial array to start finding ancestors
+            _sweetGetAllAncestors(selectedPidArray, numAncestorGen).then(function (response) {
+                //
+                // get the ancestors
+                // THEN
+                // show the list of ancestors found
+                //
+                //output('<p>response=', response);
+                //console.log(' ');
+                //console.log('GENERATION ' + numAncestorGen + ' FOUND ' + response.length + ' ANCESTORS OF ' + selectedId + ' ' + selectedName + '.');
+
+                for (var i = 0; i < response.length; i++) {
+                    printRow = '<tr><td  class="outputHeadings" colspan="5">Generation ' + i + ':</td></tr>';
+                    console.log('Generation ' + i + ':' + response[i]);
+                    //console.log(' response[' + i + '].length=' + response[i].length);
+                    for (var j = 0; j < response[i].length; j++) {
+                        displayAncNum ++;
+                        //displayAncNum = j + 1;
+                        // only the males of the last generation are moved to childIdArray for processing later
+                        if (i == numAncestorGen && genderArray[response[i][j]] == 'Male') {
+                            childIdArray.push(response[i][j]);
+                        }
+                        printRow += '<tr><td id="rightAlign" class="outputBody">Ancestor ' + displayAncNum + ':<td class="outputBody">'
+                            + response[i][j] + '</td><td class="outputBody">' + nameArray[response[i][j]]
+                            + '</td><td class="outputBody">' + genderArray[response[i][j]]
+                            + '</td><td class="outputBody">(' + lifeSpanArray[response[i][j]] + ')</td></tr>';
+                        //console.log('    Ancestor ' + displayAncNum + ':'
+                        //+ response[i][j] + ' ' + nameArray[response[i][j]] + ' ' + genderArray[response[i][j]] + ' (' + lifeSpanArray[response[i][j]] + ')');
+                    }
+                    printIt += printRow;
+                }
+                displayAncNum --
+                printIt = '<table class="outputTable"><thead class="outputHead"><tr><td colspan="5">' + displayAncNum + ' Ancestors of ' + selectedName + '</td></tr></thead><tbody>' + printIt + '</tbody></table>';
+                output(printIt);
+                console.log(' ');
+                console.log(printIt);
+                console.log('_______________________________________________________________________________________________________________________________________________');
+                printIt = '';
+                // start with  the last generation
+                //console.log('For Generation ' + numAncestorGen + ' finding ' + numDescendantGen + ' Generation(s) of Descendant Couples');
+                console.log('CALLING _sweetProcessDescendants Generation ' + numAncestorGen + ' has '+ childIdArray.length + ' persons [childIdArray=' + childIdArray + '].');
+                //_sweetProcessDescendants();
+                _sweetProcessDescendants();
+                // THEN when the couples with no children are found
+                // get the census record hints
+            })
+        })
+    }
+    // Prime Descendants Tool - Get all the male Ancestors with Dallan's program
+    function _sweetGetAllAncestors(personIds, generations) { // find the ancestors
+        var fatherId;
+        //dupFlag = "NO";                     // NO=Not a duplicate; YES= it is a duplicate
+        displayGen = numAncestorGen - generations;
+        console.log(' ');
+        console.log('STARTING _sweetGetAllAncestors for Generation ' + displayGen + ' (' + personIds + ') for ' + personIds.length + ' ancestors.');
+        //
+        // base case
+        if (generations === 0) {
+            // when jQuery.when is called with a single parameter, it returns a promise
+            // that is resolved immediately
+            return jQuery.when([personIds]);
+        }
+        // create an array of promises - one for each ancestor
+        // each promise returns an array of that person's parentIds (father, mother)
+        var promises = [];
+        for (var i = 0; i < personIds.length; i++) {
+            //console.log('  Pushing promise for ' + i + ':' + personIds[i]);
+            promises.push(FamilySearch.getParents(personIds[i]).then(function (response) {
+                //    get the Parents
+                //    THEN
+                //    save the Parents
+                var parentIds = []; // an array of the ids of the father and mother
+                var relationships = response.getChildAndParentsRelationships();
+                for (var j = 0; j < relationships.length; j++) {
+                    var relationship = relationships[j];
+                    fatherId = relationship.$getFatherId();
+                    if (!!fatherId) {
+                        console.log('  Found Father=' + fatherId + ' of ' + relationship.$getChildId());
+                        // check for duplicates in parentIds
+                        //dupFlag = "NO";
+                        //console.log('parentIds=' + parentIds;
+                        //for (var h = 0; h < parentIds.length; h++) {
+                            //console.log('    Checking ' + fatherId + ' against ' + parentIds[h]);
+                            //if (fatherId == parentIds[h]) {
+                                //dupFlag = "YES";
+                                //console.log('    Father ' + fatherId + ' is a Duplicate');
+                            //}
+                            //} else {
+                                //console.log('    Father ' + fatherId + ' is a NOT Duplicate');
+                            //}
+                        //}
+                        //console.log('    Pushing unique fatherId to parentsIds[' + fatherId + '] of ' + relationship.$getChildId());
+                        parentIds.push(fatherId);
+                        nameArray[fatherId] = ' ';
+                        genderArray[fatherId] = 'Male';
+                        lifeSpanArray[fatherId] = ' ';
+                        gotPersonFather = response.getPerson(fatherId);
+                        if (!!gotPersonFather) {
+                            if (gotPersonFather.$getDisplayName() === undefined) {
+                                nameArray[fatherId] = 'UNKNOWN';
+                            } else {
+                                nameArray[fatherId] = gotPersonFather.$getDisplayName();
+                            }
+                            if (gotPersonFather.$getDisplayLifeSpan() === undefined) {
+                                lifeSpanArray[fatherId] = '    -    ';
+                            } else {
+                                lifeSpanArray[fatherId] = gotPersonFather.$getDisplayLifeSpan();
+                            }
+                            //console.log('    Stored to nameArray[' + fatherId + '] is ' + nameArray[fatherId]
+                            //+ ' lifeSpanArray(' + lifeSpanArray[fatherId] + ').');
+                        }
+                    } else {
+                        console.log('  No Father found for ' + relationship.$getChildId());
+                    }
+                    //console.log('  Father is a Duplicate? ' + dupFlag);
+                    //if (dupFlag == "NO") {// Father is unique
+                    //} else {console.log('Father is a DUPLICATE!');}
+                    motherId = relationship.$getMotherId();
+                    if (!!motherId) {
+                        console.log('     Found Mother=' + motherId + ' of ' + relationship.$getChildId());
+                        genderArray[motherId] = 'Female';
+                        // check for duplicates in parentIds
+                        //dupFlag = "NO";
+                        //console.log('parentIds=' + parentIds;
+                        //for (var h = 0; h < parentIds.length; h++) {
+                            //console.log('    Checking ' + motherId + ' against ' + parentIds[h]);
+                            //if (motherId == parentIds[h]) {
+                                //dupFlag = "YES";
+                            //}
+                                //console.log('    Mother ' + motherId + ' is a Duplicate');
+                            //} else {
+                                //console.log('    Mother ' + motherId + ' is a NOT Duplicate');
+                            //}
+                        //}
+                        //console.log('    Pushing unique motherId to parentsIds[' + motherId + '] of ' + relationship.$getChildId());
+                        parentIds.push(motherId);
+                        nameArray[motherId] = ' ';
+                        lifeSpanArray[motherId] = ' ';
+                        gotPersonMother = response.getPerson(motherId);
+                        if (!!gotPersonMother) {
+                            if (gotPersonMother.$getDisplayName() === undefined) {
+                                nameArray[motherId] = 'UNKNOWN';
+                            } else {
+                                nameArray[motherId] = gotPersonMother.$getDisplayName();
+                            }
+                            if (gotPersonMother.$getDisplayLifeSpan() === undefined) {
+                                lifeSpanArray[motherId] = '    -    ';
+                            } else {
+                                lifeSpanArray[motherId] = gotPersonMother.$getDisplayLifeSpan();
+                            }
+                            //console.log('    Stored to nameArray[' + motherId + '] is ' + nameArray[motherId]
+                            //+ ' lifeSpanArray(' + lifeSpanArray[motherId] + ').');
+                        }
+                    } else {
+                        console.log('  No Mother found for ' + relationship.$getChildId());
+                    }
+                    //console.log('  Mother is a Duplicate? ' + dupFlag);
+                    //if (dupFlag == "NO") {// Mother is unique
+                    //} else {console.log('Mother is a DUPLICATE!');}
+                    fatherId = null;
+                    motherId = null;
+                }
+                return parentIds;
+            }));
+        }
+        return jQuery.when.apply(null, promises).then(function () {
+            // the "arguments" passed to this function holds an array of responses
+            // each response is the array of parentIds from above
+            displayGen = numAncestorGen - generations;
+            console.log('        PROMISES COMPLETE FOR GENERATION ' + displayGen + '.');
+            var allParentIds = [];
+            for (var i = 0; i < arguments.length; i++) {
+                //console.log('      Retrieved i=' + i + ' arguments[i]=' + arguments[i]);
+                if (arguments[i] === undefined) { //skip the generation if there are no parents
+                } else {
+                    for (var j = 0; j < arguments[i].length; j++) {
+                        if (arguments[i][j] === undefined) { //skip the entry if there are no parents
+                        } else {
+                            if (allParentIds.indexOf(arguments[i][j]) === -1) {// skip duplicate couples
+                                //console.log('            Pushing to allParentIds(' + arguments[i][j] + ')');
+                                allParentIds.push(arguments[i][j]);
+                            }
+                        }
+                    }
+                }
+            }
+            // return a promise for the passed-in personIds concat'd with allAncestorIds
+            return _sweetGetAllAncestors(allParentIds, generations - 1).then(function (allAncestorIds) {
+                return [personIds].concat(allAncestorIds);
+            });
+        });
+    }
+    // Prime Descendants Process Descendants - childIdArray is given to this function; it produces the primeArray, noSpouseArray and noChildrenArray
+    function _sweetProcessDescendants() {// input childIdArray
+        // In the beginning the oldest gen of males is handed to this function as the children in childIdArray
+        // subsequent generations use the previous generation's children in childIdArray
+        // they are loaded into principalArray to find their spouses and children
+        generationChildCount = 0;      // counter for the total number of children
+        coupleIdArray = [];            // clear out the couple array for each new generation
+        genCounter ++;                 // counter for the current generation number
+        displayGen = numAncestorGen - genCounter;
+        console.log('_________________________________________________________________________________________________');
+        console.log('STARTING _sweetProcessDescendants Generation ' + displayGen);
+        console.log('      childIdArray=' + childIdArray + '] Counted ' + childIdArray.length
+            + ' ancestors in this generation.');
+        //    + ' accessToken=' + accessToken);
+        if (genCounter < numDescendantGen) { // count thru the generations
+            printIt = '<table class="outputTable"><thead class="outputHead"><tr><td colspan="10">Couple(s) of Generation ' + displayGen + '</td></tr></thead><tbody>';
+            //console.log('Generation ' + genCounter + ' has ' + childIdArray.length + ' persons  . . . ');
+            //move the children of the previous generation into principalIdArray to find their spouses
+            for (var i = 0; i < childIdArray.length; i++) {
+                principalIdArray[i] = childIdArray[i];
+            }
+            childIdArray = [];   //empty the childIdArray to prepare for the next generation of children
+            // get the families
+            output('<p>Finding couples for Generation ' + displayGen + ' . . .');
+            console.log('CALLING _sweetFindCouples for ' +  principalIdArray.length + ' persons. principalIdArray=' + principalIdArray + '.');
+                //for (i = 0; i < principalIdArray.length; i++) {
+                    //console.log('  ' + principalIdArray[i]);
+                //}
+            idCounter = -1;
+            coupleCounter = 0;
+            _sweetFindCouples();
+            // THEN
+            // Find the record hints
+        } else {
+            printIt = '<table class="outputTable"><thead class="outputHead"><tr><td colspan="5">Child(ren) with No Spouses</td></tr></thead><tbody>';
+            for (var q = 0; q < noSpouseArray.length; q++) {
+                printIt += '<tr><td id="rightAlign" class="outputHeadings">Relative: '
+                    + '</td><td class="outputBody">' + noSpouseArray[q]
+                    + '</td><td class="outputBody">' + nameArray[noSpouseArray[q]]
+                    + '</td><td class="outputBody" >' + genderArray[noSpouseArray[q]]
+                    + '</td><td class="outputBody">(' + lifeSpanArray[noSpouseArray[q]] + ')</td></tr>';
+            }
+            printIt += '</tbody></table>';
+            output(printIt);
+            printIt = '<br /><table class="outputTable"><thead class="outputHead"><tr><td colspan="10">Couple(s) with no Children</td></tr></thead><tbody>';
+            for (q = 0; q < noChildrenArray.length; q++) {
+                //console.log('coupleId=' + noChildrenArray[q]);
+                personId = noChildrenArray[q].substring(0,8);
+                //console.log('personId=' + personId);
+                noChildrenArraySplit.push(personId);
+                spouseId = noChildrenArray[q].substring(9,17);
+                //console.log('spouseId=' + spouseId);
+                noChildrenArraySplit.push(spouseId);
+                printIt += '<tr><td id="rightAlign" class="outputHeadings">Couple: '
+                    + '</td><td class="outputBody">' + personId
+                    + '</td><td class="outputBody">' + nameArray[personId]
+                    + '</td><td class="outputBody">' + genderArray[personId]
+                    + '</td><td class="outputBody">(' + lifeSpanArray[personId]
+                    + ')</td><td class="outputBody">' + '&nbsp;and&nbsp;'
+                    + '</td><td class="outputBody">' + spouseId
+                    + '</td><td class="outputBody">' + nameArray[spouseId]
+                    + '</td><td class="outputBody">(' + genderArray[spouseId]
+                    + ')</td><td class="outputBody">' + lifeSpanArray[spouseId] + '</td></tr>';
+            }
+            printIt += '</thead></table>';
+            output(printIt);
+            printIt = '';
+            output('<p>Processing ' + noChildrenArraySplit.length + ' relatives looking for 1880-1910 US Census Record Hints. . .</p>');
+            //output('Sweet Spot Record Hints:');
+            console.log('CALLING _sweetFindRecordHints for ' + noChildrenArraySplit.length + '. Please wait . . . ');
+            sweetCounter = -1;
+            _sweetFindRecordHints();
+        }
+    }
+    //  Prime Descendants Find the Couples -  process the next "principal PID" or list of ancestors
+    function _sweetFindCouples() {// input principalIdArray
+        idCounter ++; // move to the next id in principalIdArray
+        console.log('  STARTING _sweetFindCouples(' + idCounter + ':' + principalIdArray[idCounter] + ') of ' + principalIdArray.length + '.');
+        //' accessToken=' + accessToken);
+        if (idCounter < principalIdArray.length) {
+            //console.log('   CALLING _sweetGetCouples('+ idCounter + ':' + principalIdArray[idCounter] + ')');
+            _sweetGetCouples(principalIdArray[idCounter]);
+        }
+        // get all the couples
+        // THEN
+        // find their children
+        else { // coupleIdArray has been created for this generation
+            printIt += '</thead></table>';
+            output(printIt); // output the couples
+            printIt = '<table class="outputTable"><thead class="outputHead"><tr><td colspan="5">Child(ren) of Generation ' + displayGen + '</td></tr></thead><tbody>';
+            console.log('__________________________________________________________________________________________________________');
+            principalIdArray = []; // done with the principal Array
+            coupleCounter = -1;
+            output('<p>' + coupleIdArray.length + ' Couple(s) found for Generation ' + displayGen + '. '
+                + ' Finding the children of ' + coupleIdArray.length + ' couple(s) . . .</p>');
+                //+ ' (' + coupleIdArray + '). Finding their children . . . ');
+            //console.log('_________________________________________________________________________________________________________');
+            console.log('CALLING _sweetFindChildren(Generation ' + displayGen + ' ' + coupleIdArray + ')');
+            _sweetFindChildren();
+        }
+    }
+    //   Prime Descendants -  get the spouses of a person and their hints
+    function _sweetGetCouples(pid) {
+        theUrl = 'https://familysearch.org/tree-data/descendancy/' + pid + '/spouses?fsSessionId=' + accessToken;
+        //console.log('theUrl=' + theUrl);
+        var numSpouses = 0;
+        var spousePid, theBirth;
+        //dupFlag = "NO";                 // NO=Not a duplicate; YES= it is a duplicate
+        //console.log('    STARTING find the spouses of _sweetGetCouples(' + idCounter + ':' + pid + ')');
+        //  + ' accessToken=' + accessToken);
+        //console.log('theURL=' + theUrl);
+        // retrieve the spouses data
+        $.getJSON(theUrl, function (result) {
+            //
+            //THEN
+            //
+            //console.log('gotCouples(' + pid + ')=' + result);
+            if (result != null) {
+                $.each(result, function (key, val) {
+                    if (key == 'data') {
+                        if (val != null) {
+                            numSpouses = val.length;
+                            console.log('     Found ' + numSpouses + ' spouse(s) of ' + pid);
+                            printRow = '';
+                            //printRow = '<tr><td>&nbsp;&nbsp;' + pid + ' has ' + numSpouses + ' spouse(s):</td></tr>';
+                            // for each spouse:
+                            $.each(val, function (spousesKey, spousesVal) {
+                                //console.log('spousesKey:spousesVal is ' + spousesKey + ':' + spousesVal);
+                                //coupleNum = spousesKey + 1;
+                                coupleCounter++;
+                                //console.log('      Couple ' + coupleCounter + ':');
+                                $.each(spousesVal, function (spouseDataKey, spouseDataVal) {
+                                    // get person's data (not the spouse)
+                                    if (spouseDataKey == 'person') {
+                                        $.each(spouseDataVal, function (personKey, personVal) {
+                                            if (personKey == 'id') {//this id should be the same as pid
+                                                //console.log('Husband Id:' + personVal);
+                                                pid = personVal;
+                                                printRow += '<tr><td class="outputHeadings">Couple ' + coupleCounter
+                                                    + ':</td><td class="outputBody">' + pid + '</td>';
+                                                //console.log('&nbsp;&nbsp;&nbsp;&nbsp;Couple: ' + pid);
+                                                // check for duplicates in primeIdArray
+                                                //dupFlag = 'NO';
+                                                //for (var primeCounter = 0; primeCounter < primeIdArray.length; primeCounter++) {
+                                                    //if (pid == primeIdArray[primeCounter]) {dupFlag = 'YES';}
+                                                //}
+                                            } else {
+                                                if (personKey == 'name') {
+                                                    nameArray[pid] = personVal;
+                                                    printRow += '<td class="outputBody">' + nameArray[pid] + '</td>';
+                                                    //console.log(' ' + nameArray[pid]);
+                                                } else {
+                                                    if (personKey == 'gender') {
+                                                        genderArray[pid] = personVal;
+                                                        printRow += '<td class="outputBody">'  + genderArray[pid] + '</td>';
+                                                        //console.log(' ' + genderArray[pid]);
+                                                    } else {
+                                                        if (personKey == 'lifeSpan') {
+                                                            lifeSpanArray[pid] = personVal;
+                                                            printRow += '<td class="outputBody">('  + lifeSpanArray[pid]  + ')</td>';
+                                                            //console.log(' ' + lifeSpanArray[pid]);
+                                                            // look for the duplicates
+                                                            //if (dupFlag == 'NO') {// person is unique
+                                                                //primeIdArray.push(pid);
+                                                                // check the birthday
+                                                                //theBirth = personVal.split('-', 1);
+                                                                //if (!isNaN(theBirth)) {
+                                                                    //if (theBirth >= 1840 && theBirth <= 1870) {
+                                                                        //console.log('       ' + pid + ' ' + nameArray[pid] + ' born:' + theBirth + ' qualified.');
+                                                                    //} else {
+                                                                        //console.log('       ' + pid + ' ' + nameArray[pid] + ' born:' + theBirth + ' not in range');
+                                                                    //}
+                                                                //}
+                                                            //}
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        })
+                                    } else {
+                                        // get the spouse's data
+                                        if (spouseDataKey == 'spouse') {
+                                            //console.log('Found spouse:spouseDataVal=' + spouseDataVal);
+                                            if (spouseDataVal != null) {
+                                                $.each(spouseDataVal, function (spouseKey, spouseVal) {
+                                                    //console.log('spouseKey:spouseVal=' + spousesKey + ':' + spouseDataVal);
+                                                    if (spouseKey == 'id') {
+                                                        if (spouseVal != null) {
+                                                            spousePid = spouseVal;
+                                                            printRow += '<td class="outputBody">&nbsp;and&nbsp;</td><td class="outputBody">' + spousePid + '</td>';
+                                                            //console.log(' and ' + spousePid);
+                                                            // check for duplicates in primeIdArray
+                                                            //for (var primeCounter = 0; primeCounter < primeIdArray.length; primeCounter++) {
+                                                                //if (spousePid == primeIdArray[primeCounter]) {dupFlag = 'YES';}
+                                                            //}
+                                                        }
+                                                    } else {
+                                                        if (spouseKey == 'name') {
+                                                            nameArray[spousePid] = spouseVal;
+                                                            printRow += '<td class="outputBody">' + nameArray[spousePid] + '</td>';
+                                                            //console.log('    Name:' + spouseVal);
+                                                        } else {
+                                                            if (spouseKey == 'gender') {
+                                                                genderArray[spousePid] = spouseVal;
+                                                                printRow += '<td class="outputBody">' + genderArray[spousePid] + '</td>';
+                                                                //console.log('    Gender:' + spouseVal);
+                                                            } else {
+                                                                if (spouseKey == 'lifeSpan') {
+                                                                    lifeSpanArray[spousePid] = spouseVal;
+                                                                    printRow += '<td class="outputBody">(' + lifeSpanArray[spousePid] + ')</td></tr>';
+                                                                    //console.log(' ' + lifeSpanArray[spousePid]);
+                                                                    //if (dupFlag == 'NO') {// pid and spouse are unique
+                                                                        // check the birthday
+                                                                        //theBirth = spouseVal.split('-', 1);
+                                                                        //if (!isNaN(theBirth)) {
+                                                                            //if (theBirth >= 1840 && theBirth <= 1870) {
+                                                                                //console.log('        ' + spousePid + ' ' + nameArray[spousePid] + ' born:' + theBirth + ' qualified.');
+                                                                            //} else {
+                                                                                //console.log('        ' + spousePid + ' ' + nameArray[spousePid] + ' born:' + theBirth + ' not in range');
+                                                                            //}
+                                                                        //}
+                                                                    //}
+                                                                    //
+                                                                    // save the couple for finding the children
+                                                                    coupleId = pid + '_' + spousePid;
+                                                                    console.log('coupleId=' + coupleId);
+                                                                    coupleIdArray.push(coupleId);
+                                                                }
+                                                            }
+                                                        }
+                                                        //dupFlag = 'NO';
+                                                    }
+                                                })
+                                            } else {
+                                                console.log('        ****************************MINOR PROBLEM No spouse for ' + pid + ' ' + nameArray[pid]
+                                                    + ' spouseDataKey=' + spouseDataKey + ' spouseDataVal=' + spouseDataVal + '.');
+                                                printRow = '';
+                                                coupleCounter--;
+                                                noSpouseArray.push(pid);
+                                            }
+                                        }
+                                    }
+                                })
+                            })
+                        }
+                    }
+                });
+                //console.log('printRow=' + printRow);
+                printIt += printRow;
+                //console.log('       printIt=' + printIt);
+                // get the next couple
+                _sweetFindCouples();
+            }
+        });
+    }
+    //  Prime Descendants - find the couple's children
+    function _sweetFindChildren() {// input coupleIdArray
+        coupleCounter++;
+        printRow = '';
+        console.log('STARTING _sweetFindChildren(Couple ' + coupleCounter + ':' + coupleIdArray[coupleCounter] + ')');
+        if (coupleCounter < coupleIdArray.length) {
+             //console.log('  CALLING _sweetGetChildren(' + coupleIdArray[coupleCounter] + ')');
+            _sweetGetChildren(coupleIdArray[coupleCounter]);
+        }
+        //
+        // get the children
+        // THEN
+        // return to Process Generations
+        else {
+            printIt += '</table>';
+            output(printIt);
+            printIt = '';
+            output('<p>' + generationChildCount + ' Child(ren) found for Generation ' + displayGen + '.');
+            console.log(generationChildCount + ' Child(ren) found for Generation ' + displayGen + '.');
+            //console.log('_________________________________________________________________________________________________________');
+            _sweetProcessDescendants();
+        }
+    }
+    //   Prime Descendants -  get the children given a couple combo id - save them in primeArray
+    function _sweetGetChildren(coupleId) {
+        var displayCoupleNum, numChildren, childId, childNum, theBirth;
+        theUrl = 'https://familysearch.org/tree-data/descendancy/' + coupleId + '/children?fsSessionId=' + accessToken;
+        //console.log(' URL=' + theUrl);
+        //console.log('    STARTING _sweetGetChildren(' +  coupleId + ')');
+        //console.log('coupleId=' + coupleId);
+        personId = coupleId.substring(0,8);
+        //console.log('personId=' + personId);
+        spouseId = coupleId.substring(9,17);
+        //console.log('spouseId=' + spouseId);
+        // retrieve the children data
+        $.getJSON(theUrl, function (result) {
+            // got the children
+            if (result != null) {
+                //console.log('Children of ' + coupleId + ':');
+                $.each(result, function (key, val) {
+                    if (key == 'data') {
+                        $.each(val, function (dataKey, dataVal) {
+                            // retrieve the children data
+                            if (dataKey == 'children') {
+                                if (dataVal != null) {
+                                    numChildren = dataVal.length;
+                                    displayCoupleNum = coupleCounter + 1;
+                                    if (numChildren > 0) {
+                                        generationChildCount += numChildren;
+                                        console.log('     Couple ' + displayCoupleNum + '(' + personId + nameArray[personId]
+                                            + ' & ' + spouseId + nameArray[spouseId] + ') have ' + numChildren + ' child(ren):');
+                                        printRow += '<tr><td class="outputHeadings" colspan="5">Couple ' + displayCoupleNum + '&nbsp;:&nbsp;'
+                                            + personId + '&nbsp;' + nameArray[personId] + '&nbsp;and&nbsp;'
+                                            + spouseId + '&nbsp;' + nameArray[spouseId] + ' have ' + numChildren + ' child(ren):</td></tr>';
+                                        // for each child:
+                                        for (var i = 0; i < numChildren; i++) {
+                                            $.each(dataVal, function (childrenKey, childrenVal) {
+                                                if (childrenKey == i) {
+                                                    childNum = i + 1;//display the child number
+                                                    // get the child data
+                                                    $.each(childrenVal, function (childKey, childVal) {
+                                                        if (childKey == 'id') {
+                                                            childId = childVal;
+                                                            // check for duplicates in primeIdArray
+                                                            dupFlag = 'NO';
+                                                            for (var primeCounter = 0; primeCounter < primeIdArray.length; primeCounter++) {
+                                                                if (childId == primeIdArray[primeCounter]){dupFlag = 'YES';}
+                                                            }
+                                                            printRow += '<tr><td id="rightAlign" class="outputBody">Child ' + childNum + ':</td><td class="outputBody">' + childId + '</td>';
+                                                            ///console.log('        Child ' + childNum + ' Id:' + childId);
+                                                        } else {
+                                                            if (childKey == 'name') {
+                                                                nameArray[childId] = childVal;
+                                                                printRow += '<td class="outputBody">' + nameArray[childId] + '</td>';
+                                                                //console.log('            Name:' + nameArray[childId]);
+                                                            } else {
+                                                                if (childKey == 'gender') {
+                                                                    genderArray[childId] = childVal;
+                                                                    printRow += '<td  class="outputBody">' + genderArray[childId] + '</td>';
+                                                                    //console.log('        Gender:' + genderArray[childId]);
+                                                                } else {
+                                                                    if (childKey == 'lifeSpan') {
+                                                                        lifeSpanArray[childId] = childVal;
+                                                                        printRow +=  '<td  class="outputBody">(' + lifeSpanArray[childId] + ')</td></tr>';
+                                                                        //console.log('        Lifespan:(' + childVal + ')');
+                                                                        // skip the duplicates
+                                                                        if (dupFlag == 'NO') {// child is unique
+                                                                            // check the birthday
+                                                                            //theBirth = childVal.split('-', 1);
+                                                                            //console.log('Child Birth=' + theBirth);
+                                                                            //if (!isNaN(theBirth)) {
+                                                                                //if (theBirth >= 1840 && theBirth <= 1905) {
+                                                                                    primeIdArray.push(childId);
+                                                                                    childIdArray.push(childId);
+                                                                                    console.log('               Child ' + childNum + ':' + childId + ' ' + nameArray[childId]
+                                                                                    //+ ' born:' + theBirth
+                                                                                    + ' qualified.');
+                                                                                //} else {
+                                                                                  //console.log('               Child ' + childNum + ':' + childId + ' ' + nameArray[childId] + ' born:' + theBirth + ' not in range');
+                                                                                //}
+                                                                            //}
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    });
+                                                }
+                                            });
+                                        }
+                                    } else {
+                                        console.log(' ');
+                                        console.log('********************* Couple: ' + displayCoupleNum + '(' + coupleId + ') have no children **********************');
+                                        printRow += '<tr><td class="outputHeadings" colspan="5">Couple ' + displayCoupleNum + '&nbsp;:&nbsp;'
+                                            + personId + '&nbsp;' + nameArray[personId] + '&nbsp;and&nbsp;'
+                                            + spouseId + '&nbsp;' + nameArray[spouseId] + ' have ' + numChildren + ' children.</td</tr>';
+                                        //
+                                        // extract the ids
+                                        //
+                                        // extract how they are related has to be a parameter passed along from _getCouples
+                                        //
+                                        // we're looking for the census when they are a couple not children
+                                        //
+                                        //output('<br />&nbsp;&nbsp;&nbsp;&nbsp;Couple ' + displayCoupleNum + ': ' + coupleId + ' HAVE NO CHILDREN!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!</td></tr>');
+                                        noChildrenArray.push(coupleId);
+                                    }
+                                }
+                            }
+                        })
+                    }
+                });
+                printIt += printRow;
+                _sweetFindChildren();
+            }
+        });
+    }
+    //   Prime Descendants -  Find record hints for the ancestors with no children and print them out
+    function _sweetFindRecordHints() {//input noChildrenArraySplit
+        sweetCounter ++;
+        printRow = '';
+        //testingController ++;
+        //console.log('STARTING _sweetFindRecordHints testingController=' + testingController);
+        //if (testingController < 10) {
+        console.log('  STARTING _sweetFindRecordHints(' + sweetCounter + ':' + noChildrenArraySplit[sweetCounter] + ').');
+        if (sweetCounter < noChildrenArraySplit.length) {
+            // get the record hints and screen for the desired censuses
+            //console.log('  CALLING _sweetGetRecordHints(' + noChildrenArraySplit[sweetCounter + ')');
+            _sweetGetRecordHints(noChildrenArraySplit[sweetCounter]);
+        } else {
+            // first wait for the get Record Hints to finish
+            // then output in new window
+            setTimeout(function () {
+                // create the output to the user
+                if(totalRecordHints > 0) {
+                    var printWindow = '<!DOCTYPE html><html><head><title>Simplify Research Sweet Spot Tool</title>'// output HTML
+                    // output css
+                    + '<link href="sweet.css" rel="stylesheet" type="text/css">'
+                    // output body and table
+                    + '</head><body><table id="sweetOutputTable"><thead id="sweetOutputHead"><tr><td colspan=4><b>'
+                    // output Title
+                    + totalRecordHints + ' Census Record Hints for the Relatives of<br />' + selectedId + ' ' + nameArray[selectedId] + '</b></td></tr></thead>'
+                    // output Column Headings
+                    + '<tr id="sweetOutputHeadings"><td >Person</td><td id="sweetOutputHeadings">Record Hint</td></tr>'
+                    // output the Record Hints
+                    + printIt + '</table>';
+                    //output('<table id="sweetOutputTable"><thead id="sweetOutputHead"><tr><td id="sweetOutputTitle" colspan=4><b>'
+                        // output Title
+                    //+ totalRecordHints + ' Census Record Hints for the Relatives of<br />' + selectedId + ' ' + nameArray[selectedId] + '</b></td></tr></thead>'
+                        // output Column Headings
+                    //+ '<tr id="sweetOutputHeadings"><td>Person</td><td>Record Hint</td></tr>'
+                        // output the Record Hints
+                    //+ printIt + '</table>');
+                    var sweetOutput = window.open();
+                    sweetOutput.document.write(printWindow);
+                    sweetOutput.document.close();
+                } else {
+                    output('<table id="sweetOutputTable"><thead id="sweetOutputHead"><tr><td id="sweetOutputTitle" colspan=4><b>'
+                        + totalRecordHints + ' Census Record Hints for the Relatives of<br />' + selectedId + ' ' + nameArray[selectedId] + '</b></td></tr></thead></table>');
+                }
+                clearInterval(theTimer);
+                _drawszlider(100, 100);
+            }, 20000);
+        }
+    }
+
+    //  Prime Descendants -   get the record hints
+    function _sweetGetRecordHints(pid) {
+        var holdPersonName = '';
+        var holdPalUrl = '';
+        var holdConfidence = '';
+        var foundCensusFlag = 'NO';
+        console.log('    STARTING _sweetGetRecordHints(' + sweetCounter + ':' + pid + ') totalRecordHints=' + totalRecordHints + '.');
+        theUrl = 'https://familysearch.org/tree-data/record-matches/' + pid + '?fsSessionId=' + accessToken;
+        console.log('      theUrl=' + theUrl);
+        $.getJSON(theUrl, function (result) {
+            console.log('______________________________________________________________________________');
+            console.log('***gotJSON(' + pid + ')');
+            if (result != null) {
+                console.log(' Result is not null');
+                $.each(result, function (key, val) {
+                    if (key == 'data') {
+                        console.log('   Found the data val=' + val);
+                        $.each(val, function (dataKey, dataVal) {
+                            if (dataKey == 'matches') {
+                                console.log('     Found matches dataVal=' + dataVal + '.');
+                                if (dataVal == '') {
+                                    console.log('      Found no matches dataVal=null');
+                                } else { // found a Record Hint
+                                    console.log('       Found Record Hints for ' + pid);
+                                    $.each(dataVal, function (suggKey, suggVal) {
+                                        console.log('______________________________________________________________________________');
+                                        //console.log('         Found suggKey=' + suggKey + ' suggVal=' + suggVal);
+                                        printRow = '<tr><td id="sweetOutputBody">' + pid + '&nbsp;<a target="_blank"'
+                                            + ' href="https://familysearch.org/tree/#view=ancestor&person=' + pid + '">'
+                                            + nameArray[pid] + '</a><br />(' + lifeSpanArray[pid] + ')</td>';
+                                        $.each(suggVal, function (suggRKey, suggRVal) {
+                                            //console.log('    Found suggRKey=' + suggRKey + ' suggRVal=' + suggRVal);
+                                            if (suggRKey == 'personName') {
+                                                holdPersonName = suggRVal;
+                                                printRow += '<td id="sweetOutputBody">Name in Record:&nbsp;' + suggRVal + '<br />Collection:&nbsp;<a href="';
+                                                console.log('Name in Record:' + holdPersonName);
+                                            } else {
+                                                if (suggRKey == 'palRecordUrl') {
+                                                    holdPalUrl = suggRVal;
+                                                    printRow += suggRVal + '" target="_blank">';
+                                                    console.log('palRecordUrl=' + holdPalUrl);
+                                                } else {
+                                                    if (suggRKey == 'collectionTitle') {
+                                                        console.log('collectionTitle=' + suggRVal);
+                                                        if (suggRVal == 'United States Census, 1880' ||
+                                                                suggRVal == 'United States Census, 1900' ||
+                                                                suggRVal == 'United States Census, 1910') {
+                                                            foundCensusFlag = 'YES';
+                                                            totalRecordHints += 1;
+                                                            console.log('Found totalRecordHints=' + totalRecordHints + ' collectionTitle=' + suggRVal);
+                                                            _hideCollection(suggRVal);
+                                                        }
+                                                    } else {
+                                                        if (suggRKey == 'confidence') {
+                                                            holdConfidence = suggRVal;
+                                                            console.log('confidence=' + holdConfidence);
+                                                        } else {
+                                                            if (suggRKey == 'score' && foundCensusFlag == 'YES') {
+                                                                printRow += newCollectionTitle + '</a><br />Score: '
+                                                                + suggRVal + '&nbsp; &nbsp; Confidence: '
+                                                                + holdConfidence + '</td></tr>';
+                                                                printIt += printRow;
+                                                                output('<p>' + pid + ' <a target="_blank" href="https://familysearch.org/tree/#view=ancestor&person=' + pid + '">'
+                                                                + ' ' + nameArray[pid] + '</a>&nbsp;(' + lifeSpanArray[pid] + ') '
+                                                                + '<a target="_blank" href="' + holdPalUrl + '">' + newCollectionTitle
+                                                                + '</a> Score: ' + suggRVal + '&nbsp; Confidence: ' + holdConfidence + '</p>');
+                                                                console.log('    Census Found - Collection Title: ' + newCollectionTitle + ' printRow=' + printRow);
+                                                            } else {
+                                                                console.log('    suggRKey=' + suggRKey + ':' + suggRVal);
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        });
+                                    });
+                                }
+                            }
+                        })
+                    }
+                })
+            }
+        });
+        _sweetFindRecordHints()
+    }
+    // Hide the Collection Name and change it to something generic
+    function _hideCollection(theTitle) {
+        if (theTitle.match(/birth/i) != null) {
+            newCollectionTitle = 'Birth Collection';
+        } else {
+            if (theTitle.match(/christening/i) != null) {
+                newCollectionTitle = 'Christening Collection';
+            } else {
+                if (theTitle.match(/baptism/i) != null) {
+                    newCollectionTitle = 'Baptism Collection';
+                } else {
+                    if (theTitle.match(/marriage/i) != null) {
+                        newCollectionTitle = 'Marriage Collection';
+                    } else {
+                        if (theTitle.match(/death/i) != null) {
+                            newCollectionTitle = 'Death Collection';
+                        } else {
+                            if (theTitle.match(/census/i) != null) {
+                                newCollectionTitle = 'Census Collection';
+                                if (theTitle == 'United States Census, 1850') {newCollectionTitle = '1850 Census Collection';}
+                                if (theTitle == 'United States Census, 1860') {newCollectionTitle = '1860 Census Collection';}
+                                if (theTitle == 'United States Census, 1870') {newCollectionTitle = '1870 Census Collection';}
+                                if (theTitle == 'United States Census, 1880') {newCollectionTitle = '1880 Census Collection';}
+                                if (theTitle == 'United States Census, 1900') {newCollectionTitle = '1900 Census Collection';}
+                                if (theTitle == 'United States Census, 1910') {newCollectionTitle = '1910 Census Collection';}
+                                if (theTitle == 'United States Census, 1920') {newCollectionTitle = '1920 Census Collection';}
+                                if (theTitle == 'United States Census, 1930') {newCollectionTitle = '1930 Census Collection';}
+                                if (theTitle == 'United States Census, 1940') {newCollectionTitle = '1940 Census Collection';}
+                            } else {
+                                if (theTitle.match(/obit/i) != null) {
+                                    newCollectionTitle = 'Obituary Collection';
+                                } else {
+                                    if (theTitle.match(/conform/i) != null) {
+                                        newCollectionTitle = 'Non-Conformist Collection';
+                                    } else {
+                                        if (theTitle.match(/World War I/i) != null) {
+                                            newCollectionTitle = 'World War I Collection';
+                                        } else {
+                                            if (theTitle.match(/World War II/i) != null) {
+                                                newCollectionTitle = 'World War I Collection';
+                                            } else {
+                                                if (theTitle.match(/Vital/i) != null) {
+                                                    newCollectionTitle = 'Vital Records Collection';
+                                                } else {
+                                                    newCollectionTitle = 'UnIdentified Collection';
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        console.log('newCollectionTitle=' + newCollectionTitle);
+    }
+    // Initialize
+    FamilySearch.init({
+        client_id: 'XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX',  // Your Developer Key
+        environment: 'sandbox',
+        redirect_uri: 'http://localhost:63342/js',  // Your Callback
+        http_function: $.ajax,
+        deferred_function: $.Deferred
+    });
+    // display results
+    function output(data) {
+        $('#output').append(data);
+    }
+</script>
+<table id="windowBody">
+    <tr id="windowHeader"><!-- This is the page header -->
+        <td>
+            <img id="windowLogo" alt="FamilySearch Logo" src="https://edge.fscdn.org/assets/img/theme-engage/assets/images/tree-logotype-1x-94806fd4d3214ea1ab7ce7eac7310d2c.png">
+            <iframe id="windowClock" src="http://free.timeanddate.com/clock/i4ds13cp/n220/fc039/tccff/ftb/tt0/tw1/tm1/ta1/tb4"></iframe>
+            <br>
+            <p id="windowTitle">Hello, Welcome to FamilySearch's Lean Learning Genealogy</p>
+            <p id="srBox">Created by Family Search's Lean Learning Team</p>
+        </td>
+    </tr>
+    <tr id="windowMiddle"><!-- This is the body of the page -->
+        <td id="sweetBox" class="toolBox">
+            <!-- This is request form presented to the user -->
+            <form id="sweetForm" >
+                <!-- This is the title of the Sweet Spot Tool-->
+                <p id="sweetFormTitle" class="toolBoxTitle">Sweet Spot Tool</p>
+                <p>This tool will look for your ancestors that have no children then find them in the 1880, 1900, and 1910 US Census.</p>
+                <!-- This is the input box for the ID of the request form-->
+                <p>Family Search Id (leave blank to use your own ID):
+                    <input id="sweetPid" type="text" value="" size="8">
+                    <!--input id="sweetPid" type="text" value="K8J1-T7Q" size="8">
+                    <!-- This is the Sweet Spot requested number of Ancestor Generations-->
+                <p>Number of Ancestor Generations:
+                    <input name="sweetNumAncestorGen" type="text" value="4" size="1"></p>
+                <!-- This is the Sweet Spot requested number of Descendant Generations down from the above -->
+                <p>Number of Descendant Generations<br>down from the last ancestor generation:
+                    <input name="sweetNumDescendantGen" type="text" value="2" size="1"></p>
+                <!-- This is the Sweet Spot submit button -->
+                <p><a href="#" onclick="_run()"><div id="sweetButton" class="submitButton">Submit</div></a></p>
+            </form>
+        </td>
+    </tr>
+    <tr><!-- This is the progress bar -->
+        <td id="progressBar">
+            <div id="szlider">
+                <div id="szliderbar"></div>
+                <div id="szazalek"></div>
+            </div>
+        </td>
+    </tr>
+    <tr><!-- this is the output box -->
+        <td id="output" class="outputBox">
+        </td>
+    </tr>
+    <tr><!-- This is page footer-->
+        <td id="windowFooter">
+        </td>
+    </tr>
+</table>
+</body>
+</html>
