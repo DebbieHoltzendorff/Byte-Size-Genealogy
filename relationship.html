@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Display the relationship of your relative in Family Tree</title>
+    <!-- Created by Debbie Holtzendorff -->
+    <script src='//code.jquery.com/jquery-1.10.1.min.js'></script>
+    <script src='//rootsdev.org/familysearch-javascript-sdk/familysearch-javascript-sdk.js'></script>
+    <link href="relationship.css" rel="stylesheet" type="text/css">
+    <script>
+        function _drawszlider(ossz, meik){
+            var szazalek=Math.round((meik*100)/ossz);
+            document.getElementById("szliderbar").style.width=szazalek+'%';
+            document.getElementById("szazalek").innerHTML=szazalek+'%';
+        }
+    </script>
+</head>
+<body>
+<script>
+    // GLOBALS
+    var accessToken;                 // the FamilySearch session ID
+    var ossz = 100;                  // total length of the progress bar
+    var meik = 0;                    // current position or value of the progress bar
+    var theTimer;                    // the timer for the progress bar
+    var userId;                      // user of this program
+    var userPidArray = [];           // array of the user ancestors
+    var selectedId;                  // user selected Id information
+    var selectedPidArray = [];       // array of the selected Id ancestors
+    var numAncestorGen;              // number of Ancestor Generations to process
+    var genCounter = -1;             // generation counter
+    var displayGen = 0;              // display number of the gen being processed
+    var numDescendantGen;            // number of Descendant Generations to process
+    var descendantGenNumber = -1;    // number of the descendant generation being processed
+    var numAncestors = 100;          // number of Relatives to process
+    var totalAncestors = 0;           // display number of the ancestor
+    var todaysDate = new Date();     // the date today
+    var yearLimit = todaysDate.getFullYear() - 110; // set the 110 year rule
+    var dupFlag = 'NO';              // Duplicate Flag to identify if the person is a duplicate
+    var printIt = '';                // output for the user window
+    var idCounter = -1;              // person id counter
+    var nameArray = [];              // array of person names
+    var genderArray = [];            // array of person genders
+    var lifeSpanArray = [];          // array of person lifespans
+    var matchFlag = 'NO';             // rh "YES" means found enough ancestors so go to record hints
+
+    // have the user sign in to FamilySearch
+    function _run() {
+        var user;
+        console.log('STARTING _run().');
+        //
+        // User sign in
+        //
+        //output('<br><b>Please sign in to FamilySearch . . .</b>');
+        FamilySearch.getAccessToken().then(function(response) {
+            accessToken = response;
+            _drawszlider(100, 0);
+            //
+            // get the current user information
+            //
+            FamilySearch.getCurrentUser().then(function (response) {
+                theTimer = setInterval(function () {
+                    meik++;
+                    if (meik >= 100) {
+                        meik = 2;
+                    }
+                    _drawszlider(ossz, meik);
+                }, 1000);
+                // timer?????????????????????????????????????
+                user = response.getUser();
+                userId = user.personId;
+                userPidArray[0].push(userId);
+                nameArray[userId] = user.contactName;
+                output('<br />Hi ' + nameArray[userId] + '. Thank you for trying our tool!<br />');
+                console.log('Found userId:' + user.personId + ' contactName:' + nameArray[userId] + ' fullName:' + user.fullName + ' email:' + user.email + ' treeUserId:' + user.treeUserId);
+                //
+                // get more user information
+                //
+                FamilySearch.getPerson(userId).then(function (response) {
+                    nameArray[userId] = response.getPerson(userId).$getDisplayName();
+                    genderArray[userId] = response.getPerson(userId).$getDisplayGender();
+                    lifeSpanArray[userId] = response.getPerson(userId).$getDisplayLifeSpan();
+                    console.log('userId: ' + userId + ' nameArray[userId]: ' + nameArray[userId] + ' genderArray[userId]:' + genderArray[userId] + ' lifeSpanArray[userId]:(' + lifeSpanArray[userId] + ').');
+                    _relRun();
+                })
+            })
+        })
+    }
+    // run the Relationship Finder Tool after the user clicks Submit
+    function _relRun() {
+        console.log('STARTING _relRun().');
+        //
+        // get the information from the user input form
+        //
+        selectedId = relForm.relPid.value;
+        selectedPidArray[0].push(selectedId);
+        numAncestorGen = relForm.relNumAncestorGen.value;
+        //
+        // get the ancestors of the user
+        //
+        console.log('CALLING _relGetAllAncestors[userPidArray=' + userPidArray + '] for ' + numAncestorGen + ' Generations.');
+        _relGetAllAncestors(userPidArray, numAncestorGen).then(function (response) {
+            //output('response=', response);
+            console.log(' ');
+            console.log(' Found ' + numAncestorGen + ' Generations of ' + userId + ' ' + nameArray[userId] + '.');
+            console.log(' ');
+            console.log('Ancestors of ' + userId + ' ' + nameArray[userId] + ' (' + lifeSpanArray[userId] + ')');
+            for (var i = 0; i < response.length; i++) {
+                printRow = '<tr><td id="trTitle">Generation ' + i + ':</td><td colspan="4"></td></tr>';
+                console.log('Generation ' + i + ':' + response[i]);
+                console.log(' response[' + i + '].length=' + response[i].length);
+                for (var j = 0; j < response[i].length; j++) {
+                    totalAncestors ++;
+                    printRow += '<tr><td id="tdLine">Ancestor ' + j + ':</td><td>' + response[i][j] + '</td><td>' + nameArray[response[i][j]] + '</td><td>' + genderArray[response[i][j]] + '</td><td>' + lifeSpanArray[response[i][j]] + '</td></tr>';
+                    console.log('    Ancestor '  + j + ' :' + response[i][j] + ' ' + nameArray[response[i][j]] + ' ' + genderArray[response[i][j]] + ' (' + lifeSpanArray[response[i][j]] + ')');
+                    // save it to userPidArray
+                    userPidArray[i].push(response[i][j]);
+                }
+                printIt += printRow;
+            }
+            printIt = '<br /><table><thead><tr><td colspan="5">' + totalAncestors + ' Ancestors of ' + nameArray[userId] + '</td></tr></thead><tbody>' + printIt + '</tbody></table><br />';
+            output(printIt);
+            printIt = ''; // prepare for new output
+            totalAncestors = 0;
+            if (selectedId != '') {// the requested Id exists
+                //                //
+                // get the information of the selectedId
+                //
+                FamilySearch.getPerson(selectedId).then(function (response) {
+                    nameArray[selectedId] = response.getPerson(selectedId).$getDisplayName();
+                    genderArray[selectedId] = response.getPerson(selectedId).$getDisplayGender();
+                    lifeSpanArray[selectedId] = response.getPerson(selectedId).$getDisplayLifeSpan();
+                    console.log('    Found Id: ' + selectedId + ' is ' + nameArray[selectedId]  + ' ' + genderArray[selectedId] + '(' + lifeSpanArray[selectedId] + ').');
+                    //
+                    // get the ancestors of the selectedId
+                    //
+                    console.log('CALLING _relGetAllAncestors[selectedPidArray=' + selectedPidArray + '] for ' + numAncestorGen + ' Generations.');
+                    _relGetAllAncestors(selectedPidArray, numAncestorGen).then(function (response) {
+                        //output('response=', response);
+                        console.log(' ');
+                        console.log('Ancestors of ' + selectedId + ' ' + nameArray[selectedId] + ' ' + genderArray[selectedId]+ ' (' + lifeSpanArray[selectedId] + ')');
+                        for (var i = 0; i < response.length; i++) {
+                            printRow = '<tr><td id="trTitle">Generation ' + i + ':</td><td colspan="4"></td></tr>';
+                            console.log('Generation ' + i + ':' + response[i]);
+                            //console.log(' response[' + i + '].length=' + response[i].length);
+                            for (var j = 0; j < response[i].length; j++) {
+                                totalAncestors ++;
+                                printRow += '<tr><td id="tdLine">Ancestor ' + j + ':</td><td>' + response[i][j] + '</td><td>' + nameArray[response[i][j]] + '</td><td>' + genderArray[response[i][j]] + '</td><td>' + lifeSpanArray[response[i][j]] + '</td></tr>';
+                                console.log('    Ancestor ' + j +':' + response[i][j] + ' ' + nameArray[response[i][j]] + ' ' + genderArray[response[i][j]] + ' (' + lifeSpanArray[response[i][j]] + ')');
+                                // save it to selectedPidArray
+                                selectedPidArray[i].push(response[i][j]);
+                            }
+                            printIt += printRow;
+                        }
+                        printIt = '<br /><table><thead><tr><td colspan="5">' + totalAncestors + ' Ancestors of ' + selectedId + ' ' + nameArray[selectedId] + ' (' + lifeSpanArray[selectedId] + ')' + '</td></tr></thead><tbody>' + printIt + '</tbody></table><br />';
+                        output(printIt);
+                        printIt = ''; // prepare for new output
+                        // compare the user and selectedId array
+                        _relCompareAncestors();
+                    })
+                })
+            }
+        });
+    }
+    // Relationship Finder Tool - Get all the Ancestors with Dallan's program
+    function _relGetAllAncestors(personIds, generations) { // find the ancestors
+        var fatherId, motherId;
+        displayGen = numAncestorGen - generations;
+        console.log('  STARTING _relGetAllAncestors for Generation ' + displayGen + ' (' + personIds + ') for ' + personIds.length + ' ancestors.');
+        //output('<br />STARTING _relGetAllAncestors[generation' + generations + ':' + personIds + '.');
+        //
+        // base case
+        if (generations === 0) {
+            // when jQuery.when is called with a single parameter, it returns a promise
+            // that is resolved immediately
+            return jQuery.when([personIds]);
+        }
+        // create an array of promises - one for each ancestor
+        // each promise returns an array of that person's parentIds (father, mother)
+        var promises = [];
+        for (var i = 0; i < personIds.length; i++) {
+            //console.log('  Pushing promise for ' + i + ':' + personIds[i]);
+            promises.push(FamilySearch.getParents(personIds[i]).then(function (response) {
+                //    get the Parents
+                //    THEN
+                //    save the Parents
+                var parentIds = []; // an array of the ids of the father and mother
+                var relationships = response.getChildAndParentsRelationships();
+                for (var j = 0; j < relationships.length; j++) {
+                    var relationship = relationships[j];
+                    fatherId = relationship.$getFatherId();
+                    if (!!fatherId) {
+                        console.log('  Found Father=' + fatherId + ' of ' + relationship.$getChildId());
+                        //console.log('    Pushing unique fatherId to parentsIds[' + fatherId + '] of ' + relationship.$getChildId());
+                        parentIds.push(fatherId);
+                        nameArray[fatherId] = ' ';
+                        genderArray[fatherId] = 'Male';
+                        lifeSpanArray[fatherId] = ' ';
+                        gotPersonFather = response.getPerson(fatherId);
+                        if (!!gotPersonFather) {
+                            if (gotPersonFather.$getDisplayName() === undefined) {
+                                nameArray[fatherId] = 'UNKNOWN';
+                            } else {
+                                nameArray[fatherId] = gotPersonFather.$getDisplayName();
+                            }
+                            if (gotPersonFather.$getDisplayLifeSpan() === undefined) {
+                                lifeSpanArray[fatherId] = '    -    ';
+                            } else {
+                                lifeSpanArray[fatherId] = gotPersonFather.$getDisplayLifeSpan();
+                            }
+                            //console.log('    Stored to nameArray[' + fatherId + '] is ' + nameArray[fatherId]
+                            //+ ' lifeSpanArray(' + lifeSpanArray[fatherId] + ').');
+                        }
+                    }
+                    motherId = relationship.$getMotherId();
+                    if (!!motherId) {
+                        console.log('     Found Mother=' + motherId + ' of ' + relationship.$getChildId());
+                        //console.log('    Pushing unique motherId to parentsIds[' + motherId + '] of ' + relationship.$getChildId());
+                        parentIds.push(motherId);
+                        nameArray[motherId] = ' ';
+                        genderArray[motherId] = 'Female';
+                        lifeSpanArray[motherId] = ' ';
+                        gotPersonMother = response.getPerson(motherId);
+                        if (!!gotPersonMother) {
+                            if (gotPersonMother.$getDisplayName() === undefined) {
+                                nameArray[motherId] = 'UNKNOWN';
+                            } else {
+                                nameArray[motherId] = gotPersonMother.$getDisplayName();
+                            }
+                            if (gotPersonMother.$getDisplayLifeSpan() === undefined) {
+                                lifeSpanArray[motherId] = '    -    ';
+                            } else {
+                                lifeSpanArray[motherId] = gotPersonMother.$getDisplayLifeSpan();
+                            }
+                            //console.log('    Stored to nameArray[' + motherId + '] is ' + nameArray[motherId]
+                            //+ ' lifeSpanArray(' + lifeSpanArray[motherId] + ').');
+                        }
+                    }
+                    fatherId = null;
+                    motherId = null;
+                }
+                return parentIds;
+            }));
+        }
+        return jQuery.when.apply(null, promises).then(function () {
+            // the "arguments" passed to this function holds an array of responses
+            // each response is the array of parentIds from above
+            displayGen = numAncestorGen - generations;
+            console.log('PROMISES COMPLETE FOR GENERATION ' + displayGen + '.');
+            var allParentIds = [];
+            for (var i = 0; i < arguments.length; i++) {
+                //console.log('      Retrieved i=' + i + ' arguments[i]=' + arguments[i]);
+                if (arguments[i] === undefined) { //skip the generation if there are no parents
+                } else {
+                    for (var j = 0; j < arguments[i].length; j++) {
+                        if (arguments[i][j] === undefined) { //skip the entry if there are no parents
+                        } else {
+                            if (allParentIds.indexOf(arguments[i][j]) === -1) {
+                                //console.log('            Pushing to allParentIds(' + arguments[i][j] + ')');
+                                allParentIds.push(arguments[i][j]);
+                            }
+                        }
+                    }
+                }
+            }
+            // return a promise for the passed-in personIds concat'd with allAncestorIds
+            return _relGetAllAncestors(allParentIds, generations - 1).then(function (allAncestorIds) {
+                return [personIds].concat(allAncestorIds);
+            });
+        });
+    }
+    // Relationship Finder Compare the Ancestor Trees
+    function _relCompareAncestors() {
+        console.log('STARTING _relCompareAncestors() for userPidArray.length=' + userPidArray.length);
+        //
+        //count thru the user ancestors comparing to the selectedId tree ancestors
+        // there will be multiple hits BUT take only the first
+        //
+        for (var i = 0; i < userPidArray.length; i++) {
+            console.log('  Retrieved Generation i=' + i + ' has length=' + userPidArray[i].length + ' userPidArray[' + i + ']=' + userPidArray[i]);
+            if (userPidArray[i] === undefined) { //skip if there are no parents for this generation
+                //do nothing
+            } else {
+                for (var j = 0; j < userPidArray[i].length; j++) {
+                    //
+                    // Process through the ancestors of the user
+                    // and compare each to the ancestors of the selectedID
+                    //
+                    console.log('    userPid[' + i + '][' + j + ']=' + userPidArray[i][j] + '.');
+                    //
+                    if (arguments[i][j] === undefined) { //skip the entry if there are no parents
+                    } else {
+                        for (var k = 0; k < selectedPidArray.length; k++) {
+                            if (selectedPidArray[i] === undefined) { //skip if there are no parents for this generation
+                                //do nothing
+                            } else {
+                                for (var l = 0; l < selectedPidArray[k].length; l++) {
+                                    console.log('selectedPidRow[' + k + ',' + l + ']=[' + userPidArray[k][l] + ']');
+                                    if (arguments[i][j] === undefined) { //skip the entry if there are no parents
+                                    } else {
+                                        if (userPidArray[i][j] == selectedPidArray[k][l]) {
+                                            // got a match - this would be the common ancestor
+                                            // determine how they are related using the counters
+                                            // i is number of gen up
+                                            // j is number removed????????????
+                                            //
+                                            // k is number of gen up
+                                            // l
+                                            // print it
+                                            output('<br />User ancestor(' + i + ',' + j + ': ' + userPidArray[i][j] + ') matches Selected Id ancestor(' + k + ',' + l + ':' + selectedPidArray[k][l] + ')');
+                                            matchFlag = 'YES';
+                                            userGeneration = i;
+                                            userNumber = j;
+                                            selectedGeneration = k;
+                                            selectedNumber = l;
+                                            i = 999;
+                                            j = 999;
+                                            k = 999;
+                                            l = 999;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Initialize
+    FamilySearch.init({
+        client_id: 'XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX',  // Your Developer Key
+	      environment: 'sandbox',
+	      redirect_uri: 'http://localhost:63342/js',  // Your Callback
+        http_function: $.ajax,
+        deferred_function: $.Deferred
+    });
+    // display results
+    function output(data) {
+        $('#output').append(data);
+    }
+</script>
+<table id="windowBody">
+    <tr id="windowHeader"><!-- This is the page hearder -->
+        <td>
+            <img id="windowLogo" alt="FamilySearch Logo" src="https://edge.fscdn.org/assets/img/theme-engage/assets/images/tree-logotype-1x-94806fd4d3214ea1ab7ce7eac7310d2c.png">
+            <iframe id="windowClock" src="http://free.timeanddate.com/clock/i4ds13cp/n220/fc039/tccff/ftb/tt0/tw1/tm1/ta1/tb4"></iframe>
+            <br>
+            <p id="windowTitle">Hello, Welcome to FamilySearch's Byte-Size Genealogy</p>
+            <p id="srBox">Created by the Lean Learning Team</p>
+        </td>
+    </tr>
+    <tr id="windowMiddle"><!-- This is the body of the page -->
+        <td id="reqBox" class="toolBox">
+            <!-- This is the form presented to the user -->
+            <form id="relForm" >
+                <!-- This is the title of the Form-->
+                <p id="relFormTitle" class="toolBoxTitle">Relationship Finder Tool</p>
+                <p>This tool will show how you are related to another person in your tree.</p>
+                <!-- This is the input box of the Form-->
+                <p>Family Search Id of a relative in your tree: <input id="relPid" type="text" value="KWJ2-5QC" size="8">
+                    <!-- This is the restrictor to number of ancestor generations-->
+                <p>Number of Ancestor Generations to search: <input name="relNumAncestorGen" type="text" value="4" size="1"></p>
+                <!-- This is the submit button -->
+                <p><a href="#" onclick="_run('rel')"><div id="relButton" class="submitButton">Click Here</div></a></p>
+            </form>
+        </td>
+    </tr>
+    <tr><!-- This is the progress bar -->
+        <td id="progressBar">
+            <div id="szlider">
+                <div id="szliderbar"></div>
+                <div id="szazalek"></div>
+            </div>
+        </td>
+    </tr>
+    <tr><!-- this is the output box -->
+        <td id="output">
+        </td>
+    </tr>
+    <tr><!-- This is page footer-->
+        <td id="windowFooter">
+        </td>
+    </tr>
+</table>
+</body>
+</html>
