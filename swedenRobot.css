@@ -1,0 +1,36 @@
+#srForm {
+    background-color: AliceBlue;
+    border: 1px solid Blue;
+    text-align: center;
+    font-size: 14px;
+}
+#srFormTitle {
+    color: Blue;
+    font-size: 24px;
+}
+#srOutputTable {
+    margin: 0 auto;
+    border: 1px solid Blue;
+    border-collapse: collapse;
+    padding: 20px;
+    background-color: AliceBlue;
+    text-align: center;
+}
+#srOutputTitle {
+    border: 1px solid Blue;
+    border-collapse: collapse;
+    padding: 10px;
+    font-size: 24px;
+    font-weight: bold;
+    text-align: center;
+	color: Blue;
+}
+#srOutputHeadings {
+    border: 1px solid Blue;
+    border-collapse: collapse;
+    padding: 10px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 14px;
+    color: Blue;
+}
