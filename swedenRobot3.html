@@ -1,0 +1,327 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 5.0//EN">
+<html>
+<head lang="en">
+    <title>WoodenVillage.org Surmame Robot 2</title>
+    <meta charset="UTF-8">
+    <meta name="author" content="Debbie Holtzendorff">
+    <meta name="description" content="Retrieve ancestors from the Family Tree and compare to the Guild Surname List.">
+    <link href="http://woodenvillage.org/woodenvillage.css" rel="stylesheet" type="text/css">
+    <link href="http://woodenvillage.org/swedenRobot.css"   rel="stylesheet" type="text/css">
+    <script src='http://woodenvillage.org/jquery-1.11.2.min.js'></script>
+    <script src='http://woodenvillage.org/familysearch-javascript-min-sdk.js'></script>
+    <script src='http://woodenvillage.org/woodenvillage.js'></script>
+</head>
+<body onload="_drawszlider(100, 0);">
+<script>
+// GLOBALS
+    var timerBegin, timerEnd;        // timer beginning and end points
+    var theProgress;                 // the timer for the progress bar
+    var ossz = 200;                 // length of the progress bar
+    var meik = 0;                    // current position or value of the progress bar
+//
+// how can I fix the progress bar? it will load the table; While search for X generations call get birth matches; so depending on how many ancestors then == total time
+// 1 gen = 1; 2 gen = 2; 3 gen = 4; 4 gen = 8; 5 gen = 16; 6 gen = 32; 7 gen = 64; 8 gen 128; 9 gen 256;  2 to the power of gen
+// so count which person it's processing
+//
+    var accessToken;                 // the FamilySearch session ID
+    //                search key,             parishName,            type,                    begin, end, volume,  DGS number,     link
+    //                    0                    1                       2                        3     4       5       6               7
+    var parish0 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 'A I Household Examination', 1829, 1832, '1', '4518736',
+        'https://familysearch.org/pal:/MM9.3.1/TH-1-159385-181315-18?cc=1974200&wc=MC6Y-N3J:311909001,311515502,311909002'];
+    var parish1 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 'A I Household Examination', 1832, 1842, '2', '4518736',
+        'https://familysearch.org/pal:/MM9.3.1/TH-1-159385-181406-12?cc=1974200&wc=MC6Y-NP8:311909001,311515502,311911701'];
+    var parish2 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 'A I Household Examination', 1843, 1850, '3', '4518736',
+        'https://familysearch.org/pal:/MM9.3.1/TH-1-159385-181414-12?cc=1974200&wc=MC6Y-KWG:311909001,311515502,311913901'];
+    var parish3 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 'A I Household Examination', 1850, 1855, '4', '4518736',
+        'https://familysearch.org/pal:/MM9.3.1/TH-1-159385-181503-12?cc=1974200&wc=MC6Y-V23:311909001,311515502,311916901'];
+    var parish4 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 'A I Household Examination', 1855, 1861, '5', '4518736',
+        'https://familysearch.org/pal:/MM9.3.1/TH-1-159385-181571-8?cc=1974200&wc=MC6Y-K3D:311909001,311515502,311546701'];
+    var parish5 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 'A I Household Examination', 1861, 1850, '6', '4526574',
+        'https://familysearch.org/pal:/MM9.3.1/TH-1-159390-19758-91?cc=1974200&wc=MC6Y-LWL:311909001,311515502,311897301'];
+    var parish6 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 'A I Household Examination', 1843, 1866, '7', '4526574',
+        'https://familysearch.org/pal:/MM9.3.1/TH-1-159390-19847-1?cc=1974200&wc=MC6Y-5MW:311909001,311515502,311925201'];
+    var parish7 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 'A I Household Examination', 1866, 1872, '8', '4526574',
+        'https://familysearch.org/pal:/MM9.3.1/TH-1-159390-19959-16?cc=1974200&wc=MC6Y-LPB:311909001,311515502,311928501'];
+    var parish8 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 'A I Household Examination', 1872, 1882, '9', '4526574',
+        'https://familysearch.org/pal:/MM9.3.1/TH-1-159390-20137-83?cc=1974200&wc=MC6Y-5WL:311909001,311515502,311933801'];
+    var parish9 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 'A I Household Examination', 1882, 1897, '10', '4531294',
+        'https://familysearch.org/pal:/MM9.3.1/TH-1-159393-30636-75?cc=1974200&wc=MC6Y-L5Q:311909001,311515502,311938901'];
+// change to PHP to read in this table then hand it to javascript
+    var parishArray = [parish0, parish1, parish2, parish3, parish4, parish5, parish6, parish7, parish8, parish9];
+    var parishRecType = 'A I Household Examination';
+    var selectedId = 'XXXX-XXX';
+    var parentDupFlag = "NO";
+    var pidArray = [];
+    var matchesArray = [];
+    var totalMatches = 0;
+    var countArray = [];
+    var printAnc = '';
+    var printMatches = '';
+// main run
+    function _run() {
+        console.log('STARTING run().');
+        timerBegin = performance.now();
+        console.log('Execution Time Begin=' + timerBegin + '.');
+        theProgress = setInterval(function () {meik++; if(meik >= 100) {meik = 1;} _drawszlider(ossz, meik);}, 1000); // redraw every second
+        selectedId = surForm.surPid.value;// get the information from the input user form//console.log('selectedId=' + selectedId + '.');
+        if (selectedId == 'XXXX-XXX') {
+            output('<p id="surOutputTitle">ERROR: XXXX-XXX is not a Family Search ID. Please enter an ID or leave it blank to use your ID.</p>');
+            clearInterval(theProgress);
+            _drawszlider(100,100);
+        } else {
+            //retrieve the parish information // some town names need the s at the end removed
+            output('Please sign in to FamilySearch . . .');
+            console.log('CALLING getAccessToken');
+            FamilySearch.getAccessToken().then(function (response) {
+                accessToken = response;
+                console.log('  gotAccessToken=' + accessToken);
+                console.log('  CALLING getCurrentUser');
+                FamilySearch.getCurrentUser().then(function (response) {// get the information about the user
+                    var user = response.getUser();//console.log('    gotCurrentUser=' + user);
+                    var userId = user.personId;
+                    console.log('      gotCurrentUser:' + userId + ' ' + user.contactName + '.');
+                    output('<br>Hi ' + user.contactName + '. Thank you for trying our app!');
+                    if (selectedId == '') { // if selectedId from the form is empty then use the current user
+                        selectedId = userId;
+                        console.log('SelectedId is empty, Using userId.');
+                    }
+                    console.log('CALLING _getPersonInfo(' + selectedId + ')');
+                    FamilySearch.getPerson(selectedId).then(function (response) {// get the information about the requested id
+                        //
+                        // notify the user if it's a bad id
+                        //
+                        var personInfo = response.getPerson();
+                        selectedId = personInfo.id; //get the capitalized version of the id
+                        nameArray[selectedId] = personInfo.$getDisplayName(); // instead of these should I store the whole person
+                        birthDateArray[selectedId] = personInfo.$getDisplayBirthDate();
+                        birthPlaceArray[selectedId] = personInfo.$getDisplayBirthPlace();
+                        // genderArray[selectedId] = personInfo.$getDisplayGender();// deathDateArray[selectedId] = personInfo.$getDisplayDeathDate();// deathPlaceArray[selectedId] = personInfo.$getDisplayDeathPlace();
+                        var splitBirth = birthPlaceArray[selectedId].split(/[,]/);
+                        var birthTown = splitBirth[0];
+                        birthTown = birthTown.replace("of, ", "");//add a routine here to check if town contains 'of ' or 'of, ' at the front then remove of and remove the (M)
+                        birthTown = birthTown.replace("of ", "");
+                        birthTown = birthTown.replace(" (M)", "");
+                        console.log('    gotPerson: ' + selectedId + ' ' + nameArray[selectedId] + ' born: ' + birthDateArray[selectedId] + ' ' + birthPlaceArray[selectedId]);
+                        //+ ' died:' + deathDateArray[selectedId] + ' ' + deathPlaceArray[selectedId])
+                        numAncestorGen = surForm.surAncestorGen.value;
+                        if (numAncestorGen < 1) {// validate the user input
+                            numAncestorGen = 1;
+                        }
+                        else if (numAncestorGen > 9) {
+                            numAncestorGen = 9;
+                        }
+                        console.log('    Requested ' + numAncestorGen + ' Ancestor Generation(s).');
+                        output('<br />Finding ancestors of ' + nameArray[selectedId] + '. Please wait . . . ');
+                        var selectedPidArray = [selectedId];
+                        console.log('CALLING _getAllAncestors(' + selectedId + ' ' + nameArray[selectedId] + ')');
+                        _getAllAncestors(selectedPidArray, numAncestorGen).then(function (response) {// get the ancestors THEN output the report
+                            console.log('_gotAllAncestors of ' + selectedId + ' response=' + response + '.');
+                            printAnc = '<p /><table id="ancestorOutput"><tr><td id="ancestorTitle">Ancestors of ' + selectedId + ' ' + nameArray[selectedId] + '</td></tr>';
+                            for (var genCounter = 0; genCounter < response.length; genCounter++) {
+                                printAnc += '<tr><td id="ancestorGen">Generation ' + genCounter + ':';
+                                for (var ancCounter = 0; ancCounter < response[genCounter].length; ancCounter++) {
+                                    printAnc += '<tr><td>&nbsp;&nbsp;&nbsp;&nbsp;Ancestor: ' + response[genCounter][ancCounter] + ' ' + nameArray[response[genCounter][ancCounter]]
+                                        + '(' + birthDateArray[response[genCounter][ancCounter]] + ' ' + birthPlaceArray[response[genCounter][ancCounter]]
+                                                //+ ' - ' + deathDateArray[response[genCounter][ancCounter]] + ' ' + deathPlaceArray[response[genCounter][ancCounter]]
+                                        + '</td></tr>';
+                                }
+                            }
+                            printAnc += '</table>';
+                            output(printAnc);
+                            console.log(printAnc);
+                            printMatches = '<p /><table id="srOutput"><tr><td id="srOutputTitle" colspan="4">Found ' + totalMatches + ' Matches for the Ancestors of ' + nameArray[selectedId] + ' ' + selectedId
+                                    + ' for ' + numAncestorGen + ' Ancestor Generations' + '</td></tr>' 
+                                    + '<tr><td id="srPerson">Count</td><td id="srPerson">SURNAME</td><td id="srPerson">BIRTH</td><td id="srPerson">LINK</td></tr>';
+                            for (var matchesCounter = 0; matchesCounter < matchesArray.length; matchesCounter++) {
+                                    matchedSurname = matchesArray[matchesCounter];
+                                    printMatches += '<tr><td id="srPerson">' + (matchesCounter + 1) + '</td><td id="srPerson">' + matchedSurname
+                                            + '</td><td id="srPerson">' + pidArray[matchedSurname] + '</td><td id="srPerson"><a href"'
+                                            + linkArray[matchedSurname] + '">' + linkArray[matchedSurname] + '</a></td></tr>';
+                                }
+                            printMatches += '</table>';
+                            output(printMatches);
+                            // open new window
+                            } else {output('<br />No matches found for ' + selectedId + ' ' + nameArray[selectedId] + ' for ' + numAncestorGen + ' Ancestor Generations');}
+                            clearInterval(theProgress);
+                            _drawszlider(100, 100);
+                            var timerEnd = performance.now();
+                            console.log('Execution Time End=' + timerEnd + '.');
+                            console.log('This program took ' + (timerEnd - timerBegin) + ' milliseconds.');
+                            output('<p />Processing Time was ' + (timerEnd - timerBegin) / 60000 + ' minutes.');
+                        })
+                    })
+                })
+            })
+        }
+    }
+    function _getAllAncestors(personIds, generations) {//find the parents generation by generation, look up the match, only save the matches' surnames(not dups) and the first ID, print the matched surnames; would be nice if sorted
+        var fatherId, motherId, fatherGotPerson, motherGotPerson, birthday, birthPlace;
+        var promises = [];    // create an array of promises - each promise returns an array of that person's parentIds (fathers + mothers)
+        displayGen = numAncestorGen - generations;
+        if (generations === 0) {// when jQuery.when is called with a single parameter, it returns a promise that is resolved immediately
+            return jQuery.when([personIds]);
+        }
+        console.log('STARTING _getAllAncestors for Generation ' + displayGen + ' [' + personIds + ']');
+        for (var i = 0; i < personIds.length; i++) {
+            console.log('  Pushing promise for ' + i + ':' + personIds[i]);
+            promises.push(FamilySearch.getParents(personIds[i]).then(function (response) {//    get the Parents    THEN    save the Parents
+                var parentIds = [];
+                var relationships = response.getChildAndParentsRelationships();
+                for (var j = 0; j < relationships.length; j++) {
+                    var relationship = relationships[j];
+                    fatherId = relationship.$getFatherId();
+                    if (!!fatherId) {
+                        console.log('    Found Father=' + fatherId + ' of ' + relationship.$getChildId());
+                        parentDupFlag = "NO"; // check for duplicates in parentIds
+                        for (var parentCounter = 0; parentCounter < parentIds.length; parentCounter++) { //console.log(' Checking ' + fatherId+ ' against ' + parentIds[h]);
+                            if (fatherId == parentIds[parentCounter]) {
+                                parentDupFlag = "YES";
+                                console.log('Father ' + fatherId + ' is a Duplicate');//} else {console.log('Father ' + fatherId + ' is a NOT Duplicate');}
+                            }
+                        }
+                        if (parentDupFlag == "NO") {// he is unique console.log('    Pushing unique fatherId to parentsIds[' +  fatherId + '] of ' + relationship.$getChildId());
+                            parentIds.push(fatherId);
+                            nameArray[fatherId] = '';
+                            birthDateArray[fatherId] = '';
+                            birthPlaceArray[fatherId] = '';//deathDateArray[fatherId] = ' ';//deathPlaceArray[fatherId] = '';
+                            fatherGotPerson = response.getPerson(fatherId);
+                            if (!!fatherGotPerson) {
+                                if (!!fatherGotPerson.$getDisplayName()) {nameArray[fatherId] = fatherGotPerson.$getDisplayName();}
+                                birthday = fatherGotPerson.$getDisplayBirthDate(); // get the birthday
+                                if (!!birthday) {birthDateArray[fatherId] = birthday;}
+                                birthPlace = fatherGotPerson.$getDisplayBirthPlace(); 
+                                if (!!birthPlace) {
+                                    birthPlaceArray[fatherId] = birthPlace;
+                                    _getRecords(fatherId, birthday, birthPlace);
+                                } else {
+                                    output('<br />' + 'Unidentified birth place of ' + fatherId + ' ' + nameArray[fatherId] + ' birth place=' + birthPlace);}
+                                //if (!!fatherGotPerson.$getDisplayDeathDate()) {deathDateArray[fatherId] = fatherGotPerson.$getDisplayDeathDate();}
+                                //if (!!fatherGotPerson.$getDisplayDeathPlace()) {deathPlaceArray[fatherId] = fatherGotPerson.$getDisplayDeathPlace();*///}
+                                // console.log('    Stored to nameArray[' + fatherId + '] is ' + nameArray[fatherId] + ' birthDateArray(' + birthDateArray[fatherId] + ').');
+                            }
+                        }
+                    }
+                    motherId = relationship.$getMotherId();
+                    if (!!motherId) {
+                        console.log('      Found Mother=' + motherId + ' of ' + relationship.$getChildId());
+                        parentDupFlag = "NO";// check for duplicates in parentIds
+                        for (parentCounter = 0; parentCounter < parentIds.length; parentCounter++) {
+                            if (motherId == parentIds[parentCounter]) {
+                                parentDupFlag = "YES";
+                                console.log('<br />Mother ' + motherId + ' is a Duplicate');//} else {console.log('Mother ' + motherId + ' is a NOT Duplicate');}
+                            }
+                        }
+                        if (parentDupFlag == "NO") {// she is unique//console.log('    Pushing unique motherId to parentsIds[' +  motherId + '] of ' + relationship.$getChildId());
+                            parentIds.push(motherId);
+                            nameArray[motherId] = '';
+                            birthDateArray[motherId] = '';
+                            birthPlaceArray[motherId] = '';//genderArray[motherId] = 'Female';//deathDateArray[motherId] = ' ';//deathPlaceArray[motherId] = '';
+                            motherGotPerson = response.getPerson(motherId);
+                            if (!!motherGotPerson){
+                                if (!!motherGotPerson.$getDisplayName()){nameArray[motherId] = motherGotPerson.$getDisplayName();}
+                                birthday = motherGotPerson.$getDisplayBirthDate(); // get the birthday
+                                if (!!birthday){birthDateArray[motherId] = birthday;}
+                                birthPlace = motherGotPerson.$getDisplayBirthPlace();
+                                if (!!birthPlace){birthPlaceArray[motherId] = birthPlace;
+                                    _getRecords(motherId, birthday, birthPlace);
+                                } else {
+                                    output('<br />' + 'Unidentified birth place of ' + motherId + ' ' + nameArray[motherId] + ' birth place=' + birthPlace);}
+                                //if (!!motherGotPerson.$getDisplayDeathDate()){ deathDateArray[motherId] = motherGotPerson.$getDisplayDeathDate();}
+                                //if (!!motherGotPerson.$getDisplayDeathPlace() == undefined){deathPlaceArray[motherId] = motherGotPerson.$getDisplayDeathPlace(); *///}
+                                // console.log('    Stored to nameArray[' + motherId + '] is ' + nameArray[motherId] + ' birthDateArray(' + birthDateArray[motherId] + ').');
+                            }
+                        }
+                    }
+                    return parentIds;
+                }
+            }))
+        }
+        return jQuery.when.apply(null, promises).then(function () {//the "arguments" passed to this function holds an array of responses; each response is the array of parentIds from above
+            displayGen = numAncestorGen - generations;
+            console.log('PROMISES COMPLETE FOR GENERATION ' + displayGen + '. Found ' + arguments.length + ' parent couples.');//' arguments=' + arguments + '.');
+            var allParentIds = [];
+            for (var k = 0; k < arguments.length; k++) {
+                if (arguments[k] != null) {
+                    for (var l = 0; l < arguments[k].length; l++) {
+                        if (allParentIds.indexOf(arguments[k][l]) === -1) {
+                            allParentIds.push(arguments[k][l]);
+                        }
+                    }
+                } else {
+                    output('<br />There are no ancestors in generation' + k + '.');
+                }
+            }
+            return _getAllAncestors(allParentIds, generations - 1).then(function (allAncestorIds) {
+                return [personIds].concat(allAncestorIds);// return a promise for the passed-in personIds concat'd with allAncestorIds
+            });
+        });
+    }
+
+// anaylize birth and match to Household Records
+    function _getRecords(pid, birth, parish) {
+        if (birthdayLength < 4) {
+            console.log('Unuseable birthday for ' + selectedId + ' ' + selectedName + ' Birth Year:' + birthYear + ' Birth Town: ' + birthTown);
+        } else {
+            var startChar = birthdayLength - 4;
+            var birthYear = birthday.slice(startChar);//split off just the year of the Birth Date
+            // make sure it it just 4 digits add a endChar?
+            console.log('Found ' + selectedId + ' ' + selectedName + ' Birth Year:' + birthYear + ' Birth Town:' + birthTown);
+            //compare Birth Year to matching parish years
+            for (var k = 0; k < parishArray.length; k++) {// count thru the parishArray
+                var parishInfo = parishArray[k];
+                if (parishInfo[2] <= birthYear && birthYear <= parishInfo[3]) {
+                    output('<table id="srOutputTable"><tr><td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Found match for ' + selectedId + ' ' + selectedName
+                            + ' born ' + birthday + ' ' + birthPlace
+                            + '<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;See ' + parishInfo[1]
+                            + ' Record Type:' + parishRecType + ', Volume:' + parishInfo[4]
+                            + ', Years:(' + parishInfo[2] + '-' + parishInfo[3] + '), DGS Number:' + parishInfo[5]
+                            + '<br /><a href="' + parishInfo[6] + '">Go to the Household Examination Collection at FamilySearch.org</a>'
+                            + '</td></tr></table>');
+                    console.log('Matched Volume=' + parishInfo);
+                }
+            }
+        }
+    }
+// Initialize
+    FamilySearch.init({
+        client_id: 'a0T3000000BfYxfEAF', // get a new app id
+        environment: 'production',
+        redirect_uri: 'http://woodenvillage.org/Debbie',
+        http_function: $.ajax,
+        deferred_function: $.Deferred
+    });
+</script>
+<table id="mainpage"><tr><td>
+    <table id="pageTitleBox">
+        <tr>
+            <td><p><img id="Wooden Village Logo" alt="Wooden Village Logo" src="http://woodenvillage.org/images/woodenvillage.png"></p>
+                <p id="pageTitle">WoodenVillage.org</p>
+                <p><a target="_blank" href="mailto:Debbie@WoodenVillage.org?subject=WoodenVillage.org Inquiry">
+                    <img id="contactUs" alt="Contact Us Logo" src="http://woodenvillage.org/images/contactus.gif" height="70">
+                    <br />Questions? email Debbie@WoodenVillage.org</a></p>
+                <p><a target="_blank" href="http://woodenvillage.org/"> Return to WoodenVillage.org Apps Page</a></p>
+            </td>
+            <td>
+                <form id="swForm">
+                    <p id="swFormTitle" class="toolBoxTitle">Robot 3 Search for Household Examination Records for Swedish Ancestors in Norra Skrävlinge Parish</p>
+                    <p id="createdBy">Created by Debbie Holtzendorff</p>
+                    <p>Family Search Id of an Ancestor: <label for="swPid"></label><input id="swPid" type="text" value="9ZHR-HXF"  size="8"></p>
+                    <p><a href="#" onclick="_run()"><div id="thButton" class="submitButton">Submit</div></a></p>
+                </form>
+            </td>
+        </tr>
+    </table>
+    <table id="pageBottom">
+        <tr><td id="output" class="outputBox"></td>
+        </tr>
+        <tr><td id="progressBar" colspan="2">
+            <div id="szlider">
+                <div id="szliderbar"></div>
+                <div id="szazalek"></div>
+            </div>
+        </td>
+        </tr>
+    </table>
+</td></tr></table>
+</body>
+</html>
