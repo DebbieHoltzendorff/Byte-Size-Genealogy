@@ -1,0 +1,167 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 5.0//EN">
+<html>
+<head lang="en">
+    <title>WoodenVillage.org Sweden Data Converter</title>
+    <meta charset="UTF-8">
+    <meta name="author" content="Debbie Holtzendorff">
+    <meta name="description" content="Swedish Parish Robot 2">
+    <link href="http://woodenvillage.org/woodenvillage.css" rel="stylesheet" type="text/css">
+    <link href="http://woodenvillage.org/swedenRobot.css"   rel="stylesheet" type="text/css">
+    <script src='http://woodenvillage.org/jquery-1.11.2.min.js'></script>
+    <script src='http://woodenvillage.org/familysearch-javascript-min-sdk.js'></script>
+    <script src='http://woodenvillage.org/woodenvillage.js'></script>
+</head>
+<body onload="_drawszlider(100, 0);">
+<script>
+// GLOBALS
+    var timerBegin, timerEnd;        // timer beginning and end points
+    var theProgress;                 // the timer for the progress bar
+    var ossz = 100;                  // length of the progress bar
+    var meik = 0;                    // current position or value of the progress bar
+    var accessToken;                 // the FamilySearch session ID
+    var printReport = '';
+// main run
+    function _run() {
+        console.log('STARTING run().');
+        timerBegin = performance.now();
+        console.log('Execution Time Begin=' + timerBegin + '.');
+        theProgress = setInterval(function () {meik ++; if(meik >= 100){meik = 1;} _drawszlider(ossz, meik);}, 1000); // redraw every second.
+        // check the id for XXXX-xXX?????????????????????????
+        //
+        //retrieve the parish information call getParishInfo(birthTown)
+        //
+        //$.get( 'swedenDataA1.csv', [data], [callback], [text] )
+        /*jQuery.get('swedenDataA1.csv', function(data) {
+            output(data);
+            newArray.push(data);
+            //var newArray = data.split(",");
+        });
+        output(newArray);
+        */
+        var parishRecType = 'A I Household Examination';
+        //                search key,          parishName,           begin, end, volume,  DGS number,     link
+        //                    0                    1                   2     3     4       5               6
+        var parish0 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 1829, 1832, '1', '4518736', 'https://familysearch.org/pal:/MM9.3.1/TH-1-159385-181315-18?cc=1974200&wc=MC6Y-N3J:311909001,311515502,311909002'];
+        var parish1 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 1832, 1842, '2', '4518736', 'https://familysearch.org/pal:/MM9.3.1/TH-1-159385-181406-12?cc=1974200&wc=MC6Y-NP8:311909001,311515502,311911701'];
+        var parish2 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 1843, 1850, '3', '4518736', 'https://familysearch.org/pal:/MM9.3.1/TH-1-159385-181414-12?cc=1974200&wc=MC6Y-KWG:311909001,311515502,311913901'];
+        var parish3 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 1850, 1855, '4', '4518736', 'https://familysearch.org/pal:/MM9.3.1/TH-1-159385-181503-12?cc=1974200&wc=MC6Y-V23:311909001,311515502,311916901'];
+        var parish4 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 1855, 1861, '5', '4518736', 'https://familysearch.org/pal:/MM9.3.1/TH-1-159385-181571-8?cc=1974200&wc=MC6Y-K3D:311909001,311515502,311546701'];
+        var parish5 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 1861, 1850, '6', '4526574', 'https://familysearch.org/pal:/MM9.3.1/TH-1-159390-19758-91?cc=1974200&wc=MC6Y-LWL:311909001,311515502,311897301'];
+        var parish6 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 1843, 1866, '7', '4526574', 'https://familysearch.org/pal:/MM9.3.1/TH-1-159390-19847-1?cc=1974200&wc=MC6Y-5MW:311909001,311515502,311925201'];
+        var parish7 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 1866, 1872, '8', '4526574', 'https://familysearch.org/pal:/MM9.3.1/TH-1-159390-19959-16?cc=1974200&wc=MC6Y-LPB:311909001,311515502,311928501'];
+        var parish8 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 1872, 1882, '9', '4526574', 'https://familysearch.org/pal:/MM9.3.1/TH-1-159390-20137-83?cc=1974200&wc=MC6Y-5WL:311909001,311515502,311933801'];
+        var parish9 = ['Norra Skrävlinge', 'Norra Skrävlinge Parish', 1882, 1897, '10', '4531294', 'https://familysearch.org/pal:/MM9.3.1/TH-1-159393-30636-75?cc=1974200&wc=MC6Y-L5Q:311909001,311515502,311938901'];
+        var parishArray = [parish0, parish1, parish2, parish3, parish4, parish5, parish6, parish7, parish8, parish9];
+        // parish info has been retrieved
+        output('Please sign in to FamilySearch . . .');
+        console.log('CALLING getAccessToken');
+        FamilySearch.getAccessToken().then(function(response) {
+            accessToken = response;
+            console.log('  gotAccessToken=' + accessToken + ' CALLING getCurrentUser');
+            FamilySearch.getCurrentUser().then(function (response) {// get the information about the user
+                var user = response.getUser();//console.log('    gotCurrentUser=' + user);
+                console.log('      gotCurrentUser:' + user.personId + ' ' + user.contactName + '.');
+                output('<br />Hi ' + user.contactName + '. Thank you for trying our robot!');
+                var selectedId = srForm.srPid.value;// get the information from the user input form
+                output('<br />Finding the birth informations for ' + selectedId);
+                console.log('selectedId=' + selectedId + '.');
+                FamilySearch.getPerson(selectedId).then(function (response) {// get the information about the requested id
+                    console.log('getPerson response=' + response)
+                    var selectedPerson = response.getPerson();
+                    var selectedName = selectedPerson.$getDisplayName();//get the name
+                    //process the birth place
+                    var birthPlace = selectedPerson.$getBirthPlace(); // get the birth Place
+                    var birthArray = birthPlace.split(/[,]/);
+                    var birthTown = birthArray[0];// some town names need the s at the end removed
+                    birthTown = birthTown.replace("of, ", "");//add a routine here to check if town contains 'of ' or 'of, ' at the front then remove of and remove the (M)
+                    birthTown = birthTown.replace("of ", "");
+                    birthTown = birthTown.replace(" (M)", "");
+                    //process the birth date
+                    var birthday = selectedPerson.$getBirthDate(); // get the birth Year
+                    var birthdayLength = birthday.length;
+                    if (birthdayLength < 4) {
+                        console.log('Unuseable birthday for ' + selectedId + ' ' + selectedName + ' Birth Year:' + birthYear + ' Birth Town: ' + birthTown);
+                    } else {
+                        var startChar = birthdayLength - 4;
+                        var birthYear = birthday.slice(startChar);//split off just the year of the Birth Date
+                        // make sure it it just 4 digits add a endChar?
+                        console.log('Found ' + selectedId + ' ' + selectedName + ' Birth Year:' + birthYear + ' Birth Town:' + birthTown);
+                        //compare Birth Year to matching parish years
+                        var parishFound = 'NO';
+                        for (var k = 0; k < parishArray.length; k++) {// count thru the parishArray
+                            var parishInfo = parishArray[k];
+                            if (parishInfo[2] <= birthYear && birthYear <= parishInfo[3]) {
+                                parishFound = 'YES';
+                                output('<table id="srOutputTable"><tr><td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Found match for ' + selectedId + ' ' + selectedName
+                                        + ' born ' + birthday + ' ' + birthPlace
+                                        + '<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;See ' + parishInfo[1]
+                                        + ' Record Type:' + parishRecType + ', Volume:' + parishInfo[4]
+                                        + ', Years:(' + parishInfo[2] + '-' + parishInfo[3] + '), DGS Number:' + parishInfo[5]
+                                        + '<br /><a href="' + parishInfo[6] + '">Go to the Household Examination Collection at FamilySearch.org</a>'
+                                        + '</td></tr></table>');
+                                console.log('Matched Volume=' + parishInfo);
+                            }
+                        }
+                        if (parishFound == 'NO') {// if no matches notify the user
+                            output('<table id="srOutputTable"><tr><td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;No match found for ' + selectedId + ' ' + selectedName
+                                    + ' born ' + birthday + ' ' + birthPlace + '</td></tr></table>');
+                        }
+                    }
+                    //
+                    //if gotperson not successful notify the user
+                    //
+                    console.log('k=' + k);
+                    clearInterval(theProgress);
+                    _drawszlider(100, 100);
+                    var timerEnd = performance.now();
+                    console.log('Execution Time End=' + timerEnd + '.');
+                    console.log('This program took ' + (timerEnd - timerBegin) + ' milliseconds.');
+                    output('<p />Processing Time was ' + (timerEnd - timerBegin) / 60000 + ' minutes.');
+                })
+            })
+        })
+    }
+// Initialize
+    FamilySearch.init({
+        client_id: 'a0T3000000BfYxfEAF', // get a new app id
+        environment: 'production',
+        redirect_uri: 'http://woodenvillage.org/Debbie',
+        http_function: $.ajax,
+        deferred_function: $.Deferred
+    });
+</script>
+<table id="mainpage"><tr><td>
+    <table id="pageTitleBox">
+        <tr>
+            <td><p><img id="Wooden Village Logo" alt="Wooden Village Logo" src="http://woodenvillage.org/images/woodenvillage.png"></p>
+                <p id="pageTitle">WoodenVillage.org</p>
+                <p><a target="_blank" href="mailto:Debbie@WoodenVillage.org?subject=WoodenVillage.org Inquiry">
+                    <img id="contactUs" alt="Contact Us Logo" src="http://woodenvillage.org/images/contactus.gif" height="70">
+                    <br />Questions? email Debbie@WoodenVillage.org</a></p>
+                <p><a target="_blank" href="http://woodenvillage.org/"> Return to WoodenVillage.org Apps Page</a></p>
+            </td>
+            <td>
+                <form id="srForm">
+                    <p id="srFormTitle" class="toolBoxTitle">Robot 2 Search for Household Examination Records for Swedish Ancestors</p>
+                    <p id="createdBy">Created by Debbie Holtzendorff</p>
+                    <p>Family Search Id of an Ancestor: <label for="srPid"></label>
+                        <input id="srPid" type="text" value="9ZHR-HXF"  size="8"></p>
+                    <p><a href="#" onclick="_run()"><div id="thButton" class="submitButton">Submit</div></a></p>
+                </form>
+            </td>
+        </tr>
+    </table>
+    <table id="pageBottom">
+        <tr><td id="output" class="outputBox"></td>
+        </tr>
+        <tr><td id="progressBar" colspan="2">
+                <div id="szlider">
+                    <div id="szliderbar"></div>
+                    <div id="szazalek"></div>
+                </div>
+            </td>
+        </tr>
+    </table>
+</td></tr></table>
+</body>
+</html>
