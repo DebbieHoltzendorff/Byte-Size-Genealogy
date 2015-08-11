@@ -1,0 +1,252 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 5.0//EN">
+<html>
+<head lang="en">
+    <title>WoodenVillage.org Sweden Robot 1 - match Household Examination</title>
+    <meta charset="UTF-8">
+    <meta name="author" content="Debbie Holtzendorff">
+    <meta name="description" content="Search Family Tree for individuals that match the Swedish Household Examination Registers.">
+    <link href="http://woodenvillage.org/woodenvillage.css" rel="stylesheet" type="text/css">
+    <link href="http://woodenvillage.org/swedenRobot.css"   rel="stylesheet" type="text/css">
+    <script src='http://woodenvillage.org/jquery-1.11.2.min.js'></script>
+    <script src='http://woodenvillage.org/familysearch-javascript-min-sdk.js'></script>
+    <script src='http://woodenvillage.org/woodenvillage.js'></script>
+</head>
+<body onload="_drawszlider(100, 0);">
+<script>
+// GLOBALS
+    var timerBegin, timerEnd;        // timer beginning and end points
+    var theProgress;                 // the timer for the progress bar
+    var ossz = 1000;                  // length of the progress bar
+    var meik = 0;                    // current position or value of the progress bar
+    var accessToken;                 // the FamilySearch session ID
+    var searchPlace = 'Norra Skrävlinge';  // try Bårslövs, Sweden or add the county name// For non-exact matches, append a tilde (~) to the end of the parameter value.
+    var searchKey   = 'NorraSkrävlinge';  // some town names need the s at the end removed
+    var parishNameArray = [];
+    parishNameArray[searchKey] = 'Norra Skrävlinge Parish';
+    var parishRecType = 'A I Household Examination';
+    /*var parishBeg1 = 1700;
+    var parishEnd1 = 1749;
+    var parishVol1 = '1';
+    var parishDGS1 = '4529184';
+    var parishBeg2 = '1750';
+    var parishEnd2 = '1900';
+    var parishVol2 = '2';
+    var parishDGS2 = '4529185';
+    var parishArray = [parishRecType1, parishVol1, parishBeg1, parishEnd1, parishDGS1,
+                    parishRecType2, parishVol2, parishBeg2, parishEnd2, parishDGS2];*///
+// learn how to read in this information...............
+
+    var parish1 = [1829, 1832, '1', '4518736'];// begin date, end date, volume number, DGS number
+    var parish2 = [1832, 1842, '2', '4518736'];
+    var parish3 = [1843, 1850, '3', '4518736'];
+    var parish4 = [1850, 1855, '4', '4518736'];
+    var parish5 = [1855, 1861, '5', '4518736'];
+    var parish6 = [1861, 1850, '6', '4526574'];
+    var parish7 = [1843, 1866, '7', '4526574'];
+    var parish8 = [1866, 1872, '8', '4526574'];
+    var parish9 = [1872, 1882, '9', '4526574'];
+    var parish10 = [1882, 1897, '10', '4531294'];
+    var parishArray = [parish1, parish2, parish3, parish4, parish5, parish6, parish7, parish8, parish9, parish10];
+    var foundBookFlag = 'NO';
+    var printRow = '';               // output for the user screen
+    var printReport = '';            // output for the user screen
+// main run
+    function _run() {
+        console.log('STARTING run().');
+        timerBegin = performance.now();
+        console.log('Execution Time Begin=' + timerBegin + '.');
+
+        theProgress = setInterval(function ()
+        {
+            meik ++;
+            if(meik >= 100){
+                meik = 1;
+            }
+            _drawszlider(ossz, meik);}, 1000
+        ); // redraw every second
+
+        output('Please sign in to FamilySearch . . .');
+        console.log('CALLING getAccessToken');
+        FamilySearch.getAccessToken().then(function(response) {
+            accessToken = response;
+            console.log('  gotAccessToken=' + accessToken);
+            console.log('  CALLING getCurrentUser');         
+            FamilySearch.getCurrentUser().then(function (response) {// get the information about the user
+                var user = response.getUser();//console.log('    gotCurrentUser=' + user);
+                console.log('      gotCurrentUser:' + user.personId + ' ' + user.contactName + '.');
+                output('<br>Hi ' + user.contactName + '. Thank you for trying our app!');
+                output('<br />Finding ancestors who lived in ' + searchPlace + '. Please wait . . . ');
+                console.log('CALLING _srSearchTree()');
+                /*or call https://familysearch.org/platform/tree/searchstart=20&context=jvihef7&count=2 //first two entries of the next page of search results
+                 GET /platform/tree/search?q=motherGivenName:Clarissa+fatherSurname:Heaton+motherSurname:Hoyt+surname:Heaton+givenName:Israel+fatherGivenName:Jonathan
+                 see https://familysearch.org/developers/docs/api/tree/Person_Search_resource
+                 count -	The number of search results per page desired by the search client.
+                 start -	The index of the first search result for this page of results.
+                 context -  The search context token, allowing requests for subsequent pages. The context is supplied in the query response with the "X-FS-Page-Context" header.
+                 q -        The query parameter that describes the search criteria. A parameter name and value is separated by a colon ':' and each name-value pair is separated by a white space ' '.
+                 q=givenName:John surname:Smith gender:male birthDate:"30 June 1900"
+                 q=birthPlace:searchPlace
+                 birthLikePlace:searchPlace
+                 christeningPlace:searchPlace
+                 marriagePlace:searchPlace
+                 deathPlace:searchPlace
+                 deathLikePlace:searchPlace
+                 burialPlace:searchPlace
+                 {relation}BirthPlace:
+                 {relation}MarriagePlace:searchPlace
+                */
+                FamilySearch.getPersonSearch({
+                    birthPlace: searchPlace, // How to search for Christening, Burial? NOT
+                    //marriagePlace: searchPlace,
+                    //deathPlace: searchPlace,
+                    count: 50
+                    //context??????????????
+                    /*Search parameters http://jsfiddle.net/ghsyjzLb/
+                     For non-exact matches, append a tilde (~) to the end of the parameter value.
+                     start - index of first result
+                     count - number of results // can I limit the number returned?
+                     birthPlace
+                     deathPlace
+                     marriagePlace
+                     {relation}BirthPlace - can be father, mother, or spouse
+                     {relation}MarriagePlace
+                     {relation}DeathPlace:
+                    */
+                }).then(function (response) {
+                    console.log('getPersonSearch response=' + response);
+                    // getPersonSearch.getIndex() returns 0 if empty result
+                    /* Status Codes
+                     200	Upon a successful read.
+                     204	Upon a successful query with no results.
+                     400	If the query to be processed was unable to be understood by the application.
+                     400	If the application declines to process the query because it would have resulted in too many results.
+                     429	If the request was throttled.
+                     Warnings
+                     299	If the query to be processed was unable to be understood by the application.
+                     413	If the application declines to process the query because it would have resulted in too many results.
+                     */
+                    output('<p /><table id="srOutputTable"><tr><td id="srOutputTitle">' + searchPlace + ' Birth Results'
+                            + ' Count:'   + response.getResultsCount()//get the total number of search results
+                            //+ '<br />Index:'   + response.getIndex()//get the starting index of the results array
+                            //+ '<br />Context:' + response.getContext()//get the search context to pass into subsequent requests for additional results
+                            + '</td></tr>');
+                    var results = response.getSearchResults();//  get the array of SearchResults from the response
+                    output('<br />Processing the First ' + results.length + ' Results . . .');// why only 15 ????????????????????? first page of result??????????
+                    for (var i = 0; i < results.length; i++) {
+                        var result = results[i];
+                        var primaryPerson = result.$getPrimaryPerson();
+                        output('<table><tr><td>Found ' + result.id
+                            //+ '</td><td>' Title: ' + result.title
+                            //+ ' Score: ' + result.score
+                            + '</td><td> Name: ' + primaryPerson.$getDisplayName()
+                            + '</td><td> BirthDate: ' + primaryPerson.$getBirthDate()
+                            + '</td><td> BirthPlace: ' + primaryPerson.$getBirthPlace()
+                            //+ '</td><td> DeathDate: ' + primaryPerson.$getDeathDate()
+                            //+ '</td><td> DeathPlace:' + primaryPerson.$getDeathPlace()
+                            //+ '</td><td> Father(s)' + getRelativeData(result.$getFathers()),
+                            //+ '</td><td> Mother(s)' + getRelativeData(result.$getMothers()),
+                            //+ '</td><td> Spouse(s)' + getRelativeData(result.$getSpouses()),
+                            //+ '</td><td> Children' + getRelativeData(result.$getChildren())
+                            + '</td></tr></table>');
+                        var birthTown;
+                        var birthPlace = primaryPerson.$getBirthPlace().split(/[,]/);
+ /*                       of Harlosa, Sweden
+                        for (var j = 0; j < birthPlace.length; j++) {
+                            birthTown = birthPlace[0];
+                            if (birthTown == 'of' or blank or null)
+                            {
+                                do nothing go on  to next + 1
+                            } else {
+                                birthPlace = primaryPerson.$getBirthPlace().split(/[,]/); // extract the town name
+                            }
+                             = birthPlace[1];
+                                j=99;
+                        }
+*/
+                        //add a routine here to check if town    contains 'of ' or 'of, ' at the front then remove of
+                        var birthTown = birthPlace[0];
+                        console.log('Found ' + result.id + ' ' + primaryPerson.$getDisplayName() + ' birthTown=' + birthTown);// instead of checking for exact spelling just extract the town and do a lookup//if(birthTown == 'Harlosa' || birthTown == 'Harlösa'){
+                        var birthday = primaryPerson.$getBirthDate();//split off just the year of the Birth Date
+                        var birthdayLength = birthday.length;
+                        if(birthdayLength > 4) {
+                            var startChar = birthdayLength - 4;
+                            var birthYear = birthday.slice(startChar);
+                            console.log('Found ' + result.id + ' ' + primaryPerson.$getDisplayName() + ' birthYear=' + birthYear);
+                            //compare Birth Year to matching parish household years
+                            foundBookFlag = 'NO';
+                            for (var k = 0; k < parishArray.length; k++) {// count thru the parishArray
+                                var parishInfo = parishArray[k];
+                                if (parishInfo[0] <= birthYear && birthYear <= parishInfo[1]) {
+                                    foundBookFlag = 'YES';
+                                    output('<table id="srOutputTable"><tr><td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Found match for ' + result.id + ' '
+                                       + primaryPerson.$getDisplayName() + ' Birth Year: ' + birthday + ' Birth Town: ' + birthPlace
+                                       + '<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;See ' + parishNameArray[searchKey]
+                                       + ' Record Type:' + parishRecType + ' Volume:' + parishArray[k][2]
+                                       + '  Years:(' + parishInfo[0] + '-' + parishInfo[1] + ') DGS Number:' + parishInfo[3]
+                                       + '</td></tr></table>');// save for printReport?????
+                                    k = 999;//done
+                                }
+                            }
+                            if (foundBookFlag == 'NO'){
+                                output('<table id="srOutputTable"><tr><td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;No matches for ' + result.id + ' '
+                                        + primaryPerson.$getDisplayName() + '. ' + parishNameArray[searchKey] + ' does not have household exams which include ' + birthday + '.');
+                            }
+                        } else {
+                            output('<table id="srOutputTable"><tr><td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;No matches for ' + result.id + ' '
+                                + primaryPerson.$getDisplayName() + '. ' + parishNameArray[searchKey] + ' does not have household exams which include ' + birthday + '.');
+                        }
+                    }
+                    // retrieve the next page of data
+                    console.log('i=' + i);
+                    clearInterval(theProgress);
+                    _drawszlider(100, 100);
+                    var timerEnd = performance.now();
+                    console.log('Execution Time End=' + timerEnd + '.');
+                    console.log('This program took ' + (timerEnd - timerBegin) + ' milliseconds.');
+                    output('<p />Processing Time was ' + (timerEnd - timerBegin) / 60000 + ' minutes.');
+                });
+            })
+        })
+    }
+// Initialize
+    FamilySearch.init({
+        client_id: 'a0T3000000BfYxfEAF', // get a new app id
+        environment: 'production',
+        redirect_uri: 'http://woodenvillage.org/Debbie',
+        http_function: $.ajax,
+        deferred_function: $.Deferred
+    });
+</script>
+<table id="mainpage"><tr><td>
+    <table id="pageTitleBox">
+        <tr>
+            <td><p><img id="Wooden Village Logo" alt="Wooden Village Logo" src="http://woodenvillage.org/images/woodenvillage.png"></p>
+                <p id="pageTitle">WoodenVillage.org</p>
+                <p><a target="_blank" href="mailto:Debbie@WoodenVillage.org?subject=WoodenVillage.org Inquiry">
+                    <img id="contactUs" alt="Contact Us Logo" src="http://woodenvillage.org/images/contactus.gif" height="70">
+                    <br />Questions? email Debbie@WoodenVillage.org</a></p>
+                <p><a target="_blank" href="http://woodenvillage.org/"> Return to WoodenVillage.org Apps Page</a></p>
+            </td>
+            <td>
+                <form id="srForm">
+                    <p id="srFormTitle" class="toolBoxTitle">Search for Household Examination Records for Swedish Ancestors in Norra Skrävlinge Parish</p>
+                    <p id="createdBy">Created by Debbie Holtzendorff</p>
+                    <p><a href="#" onclick="_run()"><div id="thButton" class="submitButton">Submit</div></a></p>
+                </form>
+            </td>
+        </tr>
+    </table>
+    <table id="pageBottom">
+        <tr><td id="output" class="outputBox"></td>
+        </tr>
+        <tr><td id="progressBar" colspan="2">
+                <div id="szlider">
+                    <div id="szliderbar"></div>
+                    <div id="szazalek"></div>
+                </div>
+            </td>
+        </tr>
+    </table>
+</td></tr></table>
+</body>
+</html>
